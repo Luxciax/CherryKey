@@ -1,41 +1,46 @@
 # CherryKey
 
-> 当前界面版本：v0.2.0（概念图复原版）
+> 当前版本：v0.3.0（Cherry Studio v1/v2 双数据源兼容版）
 
-CherryKey 是 Cherry Studio 的 Windows 本地 API 配置伴生工具。
+CherryKey 是 Cherry Studio 的 Windows 本地 API 配置伴生工具。它只读 Cherry Studio 的本地配置，提供供应商搜索、API Key / Base URL / 模型 ID 快速复制，以及常见客户端配置模板。
 
-它不会重新实现模型协议适配，也不会修改 Cherry Studio 数据。它只读 Cherry Studio 的 SQLite 数据库，提供供应商搜索、API Key / Base URL / 模型 ID 快速复制，以及常见客户端配置模板。
+## v0.3.0 兼容范围
+
+| Cherry Studio | 数据源 | Windows 默认位置 |
+|---|---|---|
+| v1.x | Chromium Local Storage LevelDB | `%APPDATA%\CherryStudio\Local Storage\leveldb` |
+| v2.x | SQLite | `%APPDATA%\CherryStudio\Data\cherrystudio.sqlite` |
+| 便携版/迁移目录 | 自动识别上述两种结构 | `<自定义 userData>` 或 `<EXE目录>\data` |
+
+程序启动时会自动检查上一次路径、Roaming/Local AppData、便携目录、迁移配置和正在运行的 Cherry Studio。若 v1 与 v2 数据同时存在，优先读取 v2 SQLite。
 
 ## 当前功能
 
-- 自动发现默认目录、迁移配置、便携目录和正在运行的 Cherry Studio 数据库
-- 支持手动选择自定义数据目录中的数据库
-- 只读读取 `user_provider`、`user_model`
-- 兼容 API Key JSON 数组和常见旧格式
-- 搜索供应商、模型、Provider ID
-- API Key 默认遮盖，可临时显示
-- 一键复制 Key、Base URL、模型 ID、完整信息
+- 自动识别 Cherry Studio v1 LevelDB 与 v2 SQLite
+- v1 读取 `persist:cherry-studio` 中的 `llm.providers`
+- v2 只读读取 `user_provider`、`user_model`
+- Cherry Studio 运行中也可读取：v1 先创建临时只读快照，不碰 `LOCK`
+- 支持供应商、模型和 Provider ID 搜索
+- API Key 默认遮盖，可临时显示和复制
 - 生成 Claude Code、OpenAI、Gemini CLI、Codex TOML
-- 自定义 `{{变量}}` 复制模板
-- 导出单个供应商为 JSON / Markdown
-- 数据库及 WAL 文件变化后自动刷新
+- JSON / Markdown 导出与自定义模板
+- 数据源变化后自动刷新
 - Windows 托盘与 `Ctrl + Shift + K` 全局快捷键
-- 复制敏感内容后 30 秒自动清理剪贴板（仅在剪贴板仍是原内容时）
+- 复制敏感内容 30 秒后自动清理（仅当剪贴板仍是原内容）
+
+## 手动选择数据源
+
+- v2：选择 `cherrystudio.sqlite`
+- v1：进入 `Local Storage\leveldb`，选择 `CURRENT`、任意 `.ldb` 或 `.log` 文件；CherryKey 会自动归一化为 LevelDB 目录
 
 ## 安全边界
 
 - SQLite 使用 `Mode=ReadOnly`
-- 不创建第二份 API Key 数据库
-- 不写回、不修复、不迁移 Cherry Studio 数据
-- 不联网、不上传、日志中不记录 API Key
-- 设置文件只保存用户手动选择的数据库路径
-
-## 已知限制
-
-1. Cherry Studio 预设供应商的默认 Base URL 来自其 Provider Registry。若用户没有在数据库中覆盖 Base URL，第一版只显示“由 Cherry 预设继承或未保存”，不会读取应用安装包中的 Registry。
-2. 第一版针对 Cherry Studio V2 SQLite 数据结构；旧版 IndexedDB / LevelDB 不在支持范围。
-3. Codex TOML 只是配置文本生成器，不保证某个上游协议一定被 Codex 原生支持。
-4. 程序处于只读模式，添加或修改供应商仍需在 Cherry Studio 完成。
+- v1 LevelDB 只读取临时快照，不写原目录
+- 不创建第二份持久化 API Key 数据库
+- 不写回、不迁移 Cherry Studio 数据
+- 不联网、不上传，日志不记录 API Key
+- 设置文件仅保存数据源路径
 
 ## 构建
 
@@ -48,25 +53,13 @@ dotnet publish src/CherryKey/CherryKey.csproj `
   -c Release `
   -r win-x64 `
   --self-contained true `
-  -p:PublishSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true
+  -p:PublishSingleFile=false
 ```
 
-GitHub Actions 会在每次推送 `main` 后构建自包含 `win-x64` ZIP；推送 `v*` 标签会自动创建 Release。
+GitHub Actions 同时生成稳定多文件版与单文件版。由于 LevelDB 包含原生库，建议优先使用 `CherryKey-portable-win-x64`。
 
-## 自定义模板变量
+## 已知限制
 
-```text
-{{providerId}}
-{{providerName}}
-{{presetProviderId}}
-{{protocol}}
-{{endpointType}}
-{{baseUrl}}
-{{apiKey}}
-{{apiKeyLabel}}
-{{modelId}}
-{{modelName}}
-{{authType}}
-{{authHeader}}
-```
+1. v1 兼容层针对官方 Redux Persist 的 `persist:cherry-studio` / `llm.providers` 结构；非常旧或第三方修改版可能需要单独适配。
+2. 预设供应商未保存的默认 Base URL 仍可能显示为“由 Cherry 预设继承或未保存”。
+3. AWS、Vertex 等非普通 API Key 认证仅展示能从供应商状态中安全识别的字段。

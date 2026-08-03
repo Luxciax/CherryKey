@@ -3,9 +3,18 @@ using System.Text.Json;
 
 namespace CherryKey.Services;
 
+/// <summary>
+/// Locates both Cherry Studio v1 Chromium Local Storage LevelDB and Cherry Studio v2 SQLite data.
+/// The class name is kept for source compatibility with older CherryKey builds.
+/// </summary>
 public sealed class CherryDatabaseLocator
 {
-    private const string DatabaseFileName = "cherrystudio.sqlite";
+    private static readonly string[] AppFolderNames =
+    [
+        "CherryStudio", "Cherry Studio", "cherry-studio", "cherrystudio",
+        "CherryStudio2", "CherryStudio-V2"
+    ];
+
     private readonly AppSettingsStore _settings;
 
     public CherryDatabaseLocator(AppSettingsStore settings)
@@ -19,11 +28,13 @@ public sealed class CherryDatabaseLocator
     public string? Locate()
     {
         LastScanCount = 0;
-        var candidates = new List<string>();
+        var candidates = new List<Candidate>();
         var candidateSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var searchRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        AddCandidate(candidates, candidateSet, _settings.LoadDatabasePath());
+        var savedPath = CherryDataSource.NormalizeSelectedPath(_settings.LoadDataSourcePath());
+        var savedPriority = CherryDataSource.GetKind(savedPath) == CherryDataSourceKind.V1LevelDb ? 18 : 0;
+        AddCandidate(candidates, candidateSet, savedPath, priority: savedPriority);
 
         var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -38,15 +49,11 @@ public sealed class CherryDatabaseLocator
                 continue;
             }
 
-            foreach (var folderName in new[]
-                     {
-                         "CherryStudio", "Cherry Studio", "cherry-studio", "cherrystudio",
-                         "CherryStudio2", "CherryStudio-V2"
-                     })
+            foreach (var folderName in AppFolderNames)
             {
                 var appRoot = Path.Combine(root, folderName);
                 AddSearchRoot(searchRoots, appRoot);
-                AddDatabaseVariants(candidates, candidateSet, appRoot);
+                AddSourceVariants(candidates, candidateSet, appRoot, priority: 10);
             }
         }
 
@@ -60,7 +67,7 @@ public sealed class CherryDatabaseLocator
                      })
             {
                 AddSearchRoot(searchRoots, appRoot);
-                AddDatabaseVariants(candidates, candidateSet, appRoot);
+                AddSourceVariants(candidates, candidateSet, appRoot, priority: 25);
             }
         }
 
@@ -68,15 +75,15 @@ public sealed class CherryDatabaseLocator
         {
             var appRoot = Path.Combine(documents, "CherryStudio");
             AddSearchRoot(searchRoots, appRoot);
-            AddDatabaseVariants(candidates, candidateSet, appRoot);
+            AddSourceVariants(candidates, candidateSet, appRoot, priority: 30);
         }
 
         AddRunningCherryLocations(candidates, candidateSet, searchRoots);
         AddTopLevelCherryDirectories(roaming, searchRoots);
         AddTopLevelCherryDirectories(local, searchRoots);
 
-        // Cherry Studio can relocate userData. The original location normally keeps a small
-        // JSON preference/preboot file, so extract path-like strings before doing a wider scan.
+        // Cherry Studio can relocate Electron userData. Small preboot/preferences JSON files
+        // in the original location may retain the custom path, so use those strings as hints.
         foreach (var root in searchRoots.ToArray())
         {
             AddJsonPathHints(root, candidates, candidateSet, searchRoots);
@@ -85,57 +92,71 @@ public sealed class CherryDatabaseLocator
         var direct = FirstExisting(candidates);
         if (direct is not null)
         {
-            LastScanSummary = $"自动检查了 {LastScanCount} 个候选位置";
+            LastScanSummary = $"自动检查了 {LastScanCount} 个候选位置，识别为 {CherryDataSource.GetDisplayName(direct)}";
             return direct;
         }
 
         foreach (var root in searchRoots.OrderBy(path => path.Length))
         {
-            foreach (var database in EnumerateDatabaseFiles(root, maxDepth: 6, maxDirectories: 3500))
+            foreach (var source in EnumerateDataSources(root, maxDepth: 6, maxDirectories: 3500))
             {
-                AddCandidate(candidates, candidateSet, database);
+                AddCandidate(candidates, candidateSet, source, priority: 100);
             }
         }
 
         direct = FirstExisting(candidates);
         LastScanSummary = direct is null
-            ? $"已扫描 {LastScanCount} 个候选位置，未发现数据库"
-            : $"自动扫描 {LastScanCount} 个候选位置后发现数据库";
+            ? $"已扫描 {LastScanCount} 个候选位置，未发现 v1 LevelDB 或 v2 SQLite"
+            : $"自动扫描 {LastScanCount} 个候选位置后发现 {CherryDataSource.GetDisplayName(direct)}";
         return direct;
     }
 
-    private string? FirstExisting(IEnumerable<string> candidates)
+    private string? FirstExisting(IEnumerable<Candidate> candidates)
     {
-        foreach (var path in candidates)
+        foreach (var candidate in candidates
+                     .OrderBy(item => item.Priority)
+                     .ThenBy(item => item.Path.Length))
         {
             LastScanCount++;
             try
             {
-                if (File.Exists(path) &&
-                    string.Equals(Path.GetFileName(path), DatabaseFileName, StringComparison.OrdinalIgnoreCase))
+                var normalized = CherryDataSource.NormalizeSelectedPath(candidate.Path);
+                if (CherryDataSource.IsValid(normalized))
                 {
-                    return Path.GetFullPath(path);
+                    return Path.GetFullPath(normalized!);
                 }
             }
             catch
             {
-                // Ignore malformed or inaccessible paths and continue scanning.
+                // Continue past malformed, missing, or inaccessible candidates.
             }
         }
 
         return null;
     }
 
-    private static void AddDatabaseVariants(List<string> candidates, HashSet<string> candidateSet, string root)
+    private static void AddSourceVariants(
+        List<Candidate> candidates,
+        HashSet<string> candidateSet,
+        string root,
+        int priority)
     {
-        AddCandidate(candidates, candidateSet, Path.Combine(root, "Data", DatabaseFileName));
-        AddCandidate(candidates, candidateSet, Path.Combine(root, "data", DatabaseFileName));
-        AddCandidate(candidates, candidateSet, Path.Combine(root, DatabaseFileName));
-        AddCandidate(candidates, candidateSet, Path.Combine(root, "User Data", "Data", DatabaseFileName));
+        // v2 SQLite. Prefer it when both v1 and v2 data remain after an upgrade.
+        AddCandidate(candidates, candidateSet, Path.Combine(root, "Data", CherryDataSource.SqliteFileName), priority);
+        AddCandidate(candidates, candidateSet, Path.Combine(root, "data", CherryDataSource.SqliteFileName), priority);
+        AddCandidate(candidates, candidateSet, Path.Combine(root, CherryDataSource.SqliteFileName), priority + 1);
+        AddCandidate(candidates, candidateSet, Path.Combine(root, "User Data", "Data", CherryDataSource.SqliteFileName), priority + 1);
+        AddCandidate(candidates, candidateSet, Path.Combine(root, "data", "Data", CherryDataSource.SqliteFileName), priority + 1);
+
+        // v1 Chromium Local Storage LevelDB.
+        AddCandidate(candidates, candidateSet, Path.Combine(root, "Local Storage", "leveldb"), priority + 5);
+        AddCandidate(candidates, candidateSet, Path.Combine(root, "local storage", "leveldb"), priority + 5);
+        AddCandidate(candidates, candidateSet, Path.Combine(root, "User Data", "Default", "Local Storage", "leveldb"), priority + 6);
+        AddCandidate(candidates, candidateSet, Path.Combine(root, "data", "Local Storage", "leveldb"), priority + 6);
     }
 
     private static void AddRunningCherryLocations(
-        List<string> candidates,
+        List<Candidate> candidates,
         HashSet<string> candidateSet,
         HashSet<string> searchRoots)
     {
@@ -149,28 +170,25 @@ public sealed class CherryDatabaseLocator
                 }
 
                 var executable = process.MainModule?.FileName;
-                if (string.IsNullOrWhiteSpace(executable))
+                var directory = string.IsNullOrWhiteSpace(executable) ? null : Path.GetDirectoryName(executable);
+                if (string.IsNullOrWhiteSpace(directory))
                 {
                     continue;
                 }
 
-                var directory = Path.GetDirectoryName(executable);
-                if (!string.IsNullOrWhiteSpace(directory))
-                {
-                    AddSearchRoot(searchRoots, directory);
-                    AddDatabaseVariants(candidates, candidateSet, directory);
+                AddSearchRoot(searchRoots, directory);
+                AddSourceVariants(candidates, candidateSet, directory, priority: 15);
 
-                    var parent = Directory.GetParent(directory);
-                    if (parent is not null && parent.Name.Contains("cherry", StringComparison.OrdinalIgnoreCase))
-                    {
-                        AddSearchRoot(searchRoots, parent.FullName);
-                        AddDatabaseVariants(candidates, candidateSet, parent.FullName);
-                    }
+                var parent = Directory.GetParent(directory);
+                if (parent is not null)
+                {
+                    AddSearchRoot(searchRoots, parent.FullName);
+                    AddSourceVariants(candidates, candidateSet, parent.FullName, priority: 16);
                 }
             }
             catch
             {
-                // Access to another process module can be denied. It is only an optional hint.
+                // Access to another process module can be denied; this is only an optional hint.
             }
             finally
             {
@@ -204,7 +222,7 @@ public sealed class CherryDatabaseLocator
 
     private static void AddJsonPathHints(
         string root,
-        List<string> candidates,
+        List<Candidate> candidates,
         HashSet<string> candidateSet,
         HashSet<string> searchRoots)
     {
@@ -241,7 +259,7 @@ public sealed class CherryDatabaseLocator
             }
             catch
             {
-                // Ignore unrelated or malformed JSON files.
+                // Ignore unrelated or malformed JSON.
             }
         }
     }
@@ -251,27 +269,27 @@ public sealed class CherryDatabaseLocator
         switch (element.ValueKind)
         {
             case JsonValueKind.String:
-                var stringValue = element.GetString();
-                if (!string.IsNullOrWhiteSpace(stringValue))
+                var value = element.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
                 {
-                    yield return stringValue;
+                    yield return value;
                 }
                 break;
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
-                    foreach (var nestedValue in EnumerateStrings(item))
+                    foreach (var nested in EnumerateStrings(item))
                     {
-                        yield return nestedValue;
+                        yield return nested;
                     }
                 }
                 break;
             case JsonValueKind.Object:
                 foreach (var property in element.EnumerateObject())
                 {
-                    foreach (var nestedValue in EnumerateStrings(property.Value))
+                    foreach (var nested in EnumerateStrings(property.Value))
                     {
-                        yield return nestedValue;
+                        yield return nested;
                     }
                 }
                 break;
@@ -281,43 +299,44 @@ public sealed class CherryDatabaseLocator
     private static void AddPathHint(
         string value,
         string? jsonDirectory,
-        List<string> candidates,
+        List<Candidate> candidates,
         HashSet<string> candidateSet,
         HashSet<string> searchRoots)
     {
-        if (value.Length > 1024 || (!value.Contains('\\') && !value.Contains('/') && !value.Contains("%")))
+        if (value.Length is < 3 or > 1024)
         {
             return;
         }
 
-        try
+        var expanded = Environment.ExpandEnvironmentVariables(value.Trim().Trim('"'));
+        if (!Path.IsPathFullyQualified(expanded) && !string.IsNullOrWhiteSpace(jsonDirectory))
         {
-            var expanded = Environment.ExpandEnvironmentVariables(value.Trim().Trim('"'));
-            if (!Path.IsPathRooted(expanded) && !string.IsNullOrWhiteSpace(jsonDirectory))
+            try
             {
                 expanded = Path.GetFullPath(Path.Combine(jsonDirectory, expanded));
             }
-
-            if (string.Equals(Path.GetFileName(expanded), DatabaseFileName, StringComparison.OrdinalIgnoreCase))
+            catch
             {
-                AddCandidate(candidates, candidateSet, expanded);
-                AddSearchRoot(searchRoots, Path.GetDirectoryName(expanded));
                 return;
             }
+        }
 
-            if (Directory.Exists(expanded))
-            {
-                AddSearchRoot(searchRoots, expanded);
-                AddDatabaseVariants(candidates, candidateSet, expanded);
-            }
-        }
-        catch
+        if (!Path.IsPathFullyQualified(expanded))
         {
-            // Not every JSON string containing a slash is a local path.
+            return;
         }
+
+        if (string.Equals(Path.GetFileName(expanded), CherryDataSource.SqliteFileName, StringComparison.OrdinalIgnoreCase))
+        {
+            AddCandidate(candidates, candidateSet, expanded, priority: 5);
+            return;
+        }
+
+        AddSearchRoot(searchRoots, expanded);
+        AddSourceVariants(candidates, candidateSet, expanded, priority: 5);
     }
 
-    private static IEnumerable<string> EnumerateDatabaseFiles(string root, int maxDepth, int maxDirectories)
+    private static IEnumerable<string> EnumerateDataSources(string root, int maxDepth, int maxDirectories)
     {
         if (!Directory.Exists(root))
         {
@@ -327,9 +346,9 @@ public sealed class CherryDatabaseLocator
         var queue = new Queue<(string Path, int Depth)>();
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         queue.Enqueue((root, 0));
-        var examined = 0;
+        var directoryCount = 0;
 
-        while (queue.Count > 0 && examined < maxDirectories)
+        while (queue.Count > 0 && directoryCount < maxDirectories)
         {
             var (directory, depth) = queue.Dequeue();
             if (!visited.Add(directory))
@@ -337,24 +356,19 @@ public sealed class CherryDatabaseLocator
                 continue;
             }
 
-            examined++;
-            string? foundDatabase = null;
-            try
+            directoryCount++;
+
+            var sqlite = Path.Combine(directory, CherryDataSource.SqliteFileName);
+            if (File.Exists(sqlite))
             {
-                var candidate = Path.Combine(directory, DatabaseFileName);
-                if (File.Exists(candidate))
-                {
-                    foundDatabase = candidate;
-                }
-            }
-            catch
-            {
-                continue;
+                yield return sqlite;
             }
 
-            if (foundDatabase is not null)
+            if (string.Equals(Path.GetFileName(directory), "leveldb", StringComparison.OrdinalIgnoreCase)
+                && CherryDataSource.IsLevelDbDirectory(directory))
             {
-                yield return foundDatabase;
+                yield return directory;
+                continue;
             }
 
             if (depth >= maxDepth)
@@ -362,22 +376,25 @@ public sealed class CherryDatabaseLocator
                 continue;
             }
 
+            IEnumerable<string> children;
             try
             {
-                foreach (var child in Directory.EnumerateDirectories(directory))
-                {
-                    var name = Path.GetFileName(child);
-                    if (ShouldSkipDirectory(name))
-                    {
-                        continue;
-                    }
-
-                    queue.Enqueue((child, depth + 1));
-                }
+                children = Directory.EnumerateDirectories(directory, "*", SearchOption.TopDirectoryOnly).ToArray();
             }
             catch
             {
-                // Ignore inaccessible folders.
+                continue;
+            }
+
+            foreach (var child in children)
+            {
+                var name = Path.GetFileName(child);
+                if (ShouldSkipDirectory(name))
+                {
+                    continue;
+                }
+
+                queue.Enqueue((child, depth + 1));
             }
         }
     }
@@ -385,10 +402,35 @@ public sealed class CherryDatabaseLocator
     private static bool ShouldSkipDirectory(string name) => name.Equals("Cache", StringComparison.OrdinalIgnoreCase)
         || name.Equals("Code Cache", StringComparison.OrdinalIgnoreCase)
         || name.Equals("GPUCache", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("Temp", StringComparison.OrdinalIgnoreCase)
         || name.Equals("Crashpad", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("Service Worker", StringComparison.OrdinalIgnoreCase);
+        || name.Equals("logs", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase)
+        || name.StartsWith("Service Worker", StringComparison.OrdinalIgnoreCase);
+
+    private static void AddCandidate(
+        List<Candidate> candidates,
+        HashSet<string> candidateSet,
+        string? path,
+        int priority)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            var normalized = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path));
+            if (candidateSet.Add(normalized))
+            {
+                candidates.Add(new Candidate(normalized, priority));
+            }
+        }
+        catch
+        {
+            // Ignore malformed hints.
+        }
+    }
 
     private static void AddSearchRoot(HashSet<string> roots, string? path)
     {
@@ -399,32 +441,13 @@ public sealed class CherryDatabaseLocator
 
         try
         {
-            roots.Add(Path.GetFullPath(path));
+            roots.Add(Path.GetFullPath(Environment.ExpandEnvironmentVariables(path)));
         }
         catch
         {
-            // Ignore invalid paths.
+            // Ignore malformed hints.
         }
     }
 
-    private static void AddCandidate(List<string> candidates, HashSet<string> candidateSet, string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        try
-        {
-            var fullPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path));
-            if (candidateSet.Add(fullPath))
-            {
-                candidates.Add(fullPath);
-            }
-        }
-        catch
-        {
-            // Ignore invalid paths.
-        }
-    }
+    private sealed record Candidate(string Path, int Priority);
 }

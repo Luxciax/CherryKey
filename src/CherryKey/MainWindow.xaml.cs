@@ -53,7 +53,7 @@ public partial class MainWindow : Window, IDisposable
         {
             AppLog.Write("ViewModel initialization failed.", ex);
             MessageBox.Show(
-                $"读取 Cherry Studio 配置时发生错误：\n\n{ex.Message}\n\n窗口仍可使用，请手动选择数据库。",
+                $"读取 Cherry Studio 配置时发生错误：\n\n{ex.Message}\n\n窗口仍可使用，请手动选择数据源。",
                 "CherryKey",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);

@@ -24,7 +24,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private ProviderRecord? _selectedProvider;
     private string _databasePath = string.Empty;
     private string _connectionStatus = "尚未连接";
-    private string _statusMessage = "正在自动查找 Cherry Studio 数据库…";
+    private string _statusMessage = "正在自动查找 Cherry Studio v1/v2 数据源…";
     private string _lastRefreshText = "尚未刷新";
     private bool _isBusy;
     private FileSystemWatcher? _watcher;
@@ -93,6 +93,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 OnPropertyChanged(nameof(DatabaseDisplayPath));
                 OnPropertyChanged(nameof(ConnectionBadgeText));
+                OnPropertyChanged(nameof(DataSourceTypeText));
             }
         }
     }
@@ -102,6 +103,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         : DatabasePath;
 
     public string ConnectionBadgeText => string.IsNullOrWhiteSpace(DatabasePath) ? "未连接" : "已连接";
+    public string DataSourceTypeText => CherryDataSource.GetDisplayName(DatabasePath);
     public string ProviderCountText => $"共 {Providers.Count} 个供应商";
 
     public string ConnectionStatus
@@ -169,8 +171,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IsBusy = true;
         try
         {
-            ConnectionStatus = "正在自动发现 Cherry Studio 数据库";
-            StatusMessage = "正在检查默认目录、迁移配置、便携目录和正在运行的 Cherry Studio…";
+            ConnectionStatus = "正在自动发现 Cherry Studio 数据源";
+            StatusMessage = "正在检查 v1 LevelDB、v2 SQLite、迁移配置、便携目录和正在运行的 Cherry Studio…";
 
             DatabasePath = _locator.Locate() ?? string.Empty;
             OnPropertyChanged(nameof(DatabaseDisplayPath));
@@ -178,20 +180,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (string.IsNullOrWhiteSpace(DatabasePath))
             {
                 ClearProviders();
-                ConnectionStatus = "未自动发现 Cherry Studio 数据库";
-                StatusMessage = "已完成自动扫描。若 Cherry Studio 使用了完全自定义的数据目录，请点击“选择数据库”。";
+                ConnectionStatus = "未发现 Cherry Studio 数据源";
+                StatusMessage = "已完成自动扫描。支持 v1 Local Storage\\leveldb 与 v2 Data\\cherrystudio.sqlite；仍未发现时请点击“选择数据源”。";
                 return;
             }
 
-            _settings.SaveDatabasePath(DatabasePath);
+            _settings.SaveDataSourcePath(DatabasePath);
             ReadDatabaseCore();
         }
         catch (Exception ex)
         {
             ClearProviders();
-            ConnectionStatus = "数据库扫描失败";
+            ConnectionStatus = "数据源扫描失败";
             StatusMessage = ex.Message;
-            AppLog.Write("Database auto-discovery failed.", ex);
+            AppLog.Write("Cherry data-source auto-discovery failed.", ex);
         }
         finally
         {
@@ -206,7 +208,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(DatabasePath) || !File.Exists(DatabasePath))
+        if (string.IsNullOrWhiteSpace(DatabasePath) || !CherryDataSource.IsValid(DatabasePath))
         {
             RescanDatabase();
             return;
@@ -221,7 +223,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             ConnectionStatus = "读取失败";
             StatusMessage = ex.Message;
-            AppLog.Write("Database refresh failed.", ex);
+            AppLog.Write("Cherry data-source refresh failed.", ex);
         }
         finally
         {
@@ -246,9 +248,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         ProvidersView.Refresh();
         OnPropertyChanged(nameof(ProviderCountText));
-        ConnectionStatus = "已自动发现 Cherry Studio 数据库";
+        ConnectionStatus = $"已连接 {CherryDataSource.GetDisplayName(DatabasePath)}";
         LastRefreshText = DateTime.Now.ToString("HH:mm:ss");
-        StatusMessage = $"已读取 {Providers.Count} 个供应商；{_locator.LastScanSummary}；数据库全程只读。";
+        StatusMessage = $"已读取 {Providers.Count} 个供应商；{_locator.LastScanSummary}；数据源全程只读。";
         SetupWatcher();
     }
 
@@ -264,8 +266,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var dialog = new OpenFileDialog
         {
-            Title = "选择 Cherry Studio 数据库",
-            Filter = "Cherry Studio 数据库|cherrystudio.sqlite|SQLite 数据库|*.sqlite;*.db|所有文件|*.*",
+            Title = "选择 Cherry Studio 数据源",
+            Filter = "Cherry Studio v1/v2 数据源|cherrystudio.sqlite;CURRENT;*.ldb;*.log|v2 SQLite|cherrystudio.sqlite;*.sqlite;*.db|v1 LevelDB 文件|CURRENT;*.ldb;*.log|所有文件|*.*",
             CheckFileExists = true,
             FileName = "cherrystudio.sqlite"
         };
@@ -275,8 +277,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        DatabasePath = dialog.FileName;
-        _settings.SaveDatabasePath(DatabasePath);
+        var normalized = CherryDataSource.NormalizeSelectedPath(dialog.FileName);
+        if (!CherryDataSource.IsValid(normalized))
+        {
+            ConnectionStatus = "无法识别所选数据源";
+            StatusMessage = "v1 请在 Local Storage\\leveldb 中选择 CURRENT 或任意 .ldb/.log；v2 请选择 cherrystudio.sqlite。";
+            return;
+        }
+
+        DatabasePath = normalized!;
+        _settings.SaveDataSourcePath(DatabasePath);
         Refresh();
     }
 
@@ -449,7 +459,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _watcher?.Dispose();
         _refreshTimer?.Dispose();
 
-        var directory = Path.GetDirectoryName(DatabasePath);
+        var kind = CherryDataSource.GetKind(DatabasePath);
+        var directory = kind == CherryDataSourceKind.V1LevelDb
+            ? DatabasePath
+            : Path.GetDirectoryName(DatabasePath);
+        var filter = kind == CherryDataSourceKind.V1LevelDb ? "*" : "cherrystudio.sqlite*";
+
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
         {
             return;
@@ -461,14 +476,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Timeout.Infinite,
             Timeout.Infinite);
 
-        _watcher = new FileSystemWatcher(directory, "cherrystudio.sqlite*")
+        _watcher = new FileSystemWatcher(directory, filter)
         {
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
             EnableRaisingEvents = true
         };
 
-        FileSystemEventHandler changed = (_, _) => _refreshTimer?.Change(700, Timeout.Infinite);
-        RenamedEventHandler renamed = (_, _) => _refreshTimer?.Change(700, Timeout.Infinite);
+        FileSystemEventHandler changed = (_, _) => _refreshTimer?.Change(900, Timeout.Infinite);
+        RenamedEventHandler renamed = (_, _) => _refreshTimer?.Change(900, Timeout.Infinite);
         _watcher.Changed += changed;
         _watcher.Created += changed;
         _watcher.Deleted += changed;

@@ -6,11 +6,24 @@ namespace CherryKey.Services;
 
 public sealed class CherryDatabaseReader
 {
-    public IReadOnlyList<ProviderRecord> Read(string databasePath)
+    private readonly CherryV1LevelDbReader _v1Reader = new();
+
+    public IReadOnlyList<ProviderRecord> Read(string dataSourcePath)
+    {
+        return CherryDataSource.GetKind(dataSourcePath) switch
+        {
+            CherryDataSourceKind.V1LevelDb => _v1Reader.Read(dataSourcePath),
+            CherryDataSourceKind.V2Sqlite => ReadSqlite(dataSourcePath),
+            _ => throw new InvalidDataException(
+                "无法识别 Cherry Studio 数据源。v1 请选择 Local Storage\\leveldb，v2 请选择 Data\\cherrystudio.sqlite。")
+        };
+    }
+
+    private static IReadOnlyList<ProviderRecord> ReadSqlite(string databasePath)
     {
         if (!File.Exists(databasePath))
         {
-            throw new FileNotFoundException("找不到 Cherry Studio 数据库。", databasePath);
+            throw new FileNotFoundException("找不到 Cherry Studio v2 SQLite 数据库。", databasePath);
         }
 
         using var connection = new SqliteConnection(

@@ -52,7 +52,7 @@
                                 Background="#171E30"
                                 BorderBrush="#28354C"
                                 Padding="7,2">
-                            <TextBlock Text="v0.2.0" FontSize="10" Foreground="#AAB6C8"/>
+                            <TextBlock Text="v0.3.0" FontSize="10" Foreground="#AAB6C8"/>
                         </Border>
                     </StackPanel>
 
@@ -246,7 +246,7 @@
                                                FontWeight="SemiBold"
                                                Margin="0,10,0,5"
                                                HorizontalAlignment="Center"/>
-                                    <TextBlock Text="程序会自动搜索 Cherry Studio 数据库"
+                                    <TextBlock Text="程序会自动识别 v1 LevelDB 与 v2 SQLite"
                                                Foreground="{StaticResource MutedBrush}"
                                                FontSize="11"
                                                TextAlignment="Center"/>
@@ -313,7 +313,7 @@
                             <RowDefinition Height="32"/>
                         </Grid.RowDefinitions>
 
-                        <!-- 数据库自动发现卡片 -->
+                        <!-- Cherry Studio v1/v2 数据源自动发现卡片 -->
                         <Border Grid.Row="0"
                                 Background="{StaticResource HeaderGlowGradient}"
                                 BorderBrush="#253650"
@@ -361,6 +361,15 @@
                                             </Border.Style>
                                             <TextBlock Text="{Binding ConnectionBadgeText}" FontSize="10"/>
                                         </Border>
+                                        <Border Style="{StaticResource Pill}"
+                                                Background="#25213A"
+                                                BorderBrush="#4B3D74"
+                                                Padding="7,2"
+                                                Margin="6,0,0,0">
+                                            <TextBlock Text="{Binding DataSourceTypeText}"
+                                                       Foreground="#BEACED"
+                                                       FontSize="10"/>
+                                        </Border>
                                     </StackPanel>
                                     <TextBlock Text="{Binding DatabaseDisplayPath}"
                                                Foreground="{StaticResource MutedBrush}"
@@ -376,7 +385,7 @@
                                             Margin="0,0,8,0"/>
                                     <Button Style="{StaticResource SecondaryButton}"
                                             Command="{Binding ChooseDatabaseCommand}"
-                                            Content="▰  选择数据库"/>
+                                            Content="▰  选择数据源"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -409,7 +418,7 @@
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <Border Style="{StaticResource Pill}" Margin="10,0,0,0">
-                                        <TextBlock Text="{Binding SelectedProvider.ProtocolDisplay, TargetNullValue=等待数据库}"
+                                        <TextBlock Text="{Binding SelectedProvider.ProtocolDisplay, TargetNullValue=等待数据源}"
                                                    Foreground="#C6ABFF"
                                                    FontSize="10"/>
                                     </Border>
@@ -771,7 +780,7 @@
                                                FontSize="17"
                                                FontWeight="SemiBold"
                                                Margin="0,16,0,6"/>
-                                    <TextBlock Text="已自动扫描常见目录；仍未发现时可手动选择数据库"
+                                    <TextBlock Text="已扫描 v1/v2 常见目录；仍未发现时可手动选择数据源"
                                                Foreground="{StaticResource MutedBrush}"
                                                TextAlignment="Center"/>
                                     <Button Style="{StaticResource PrimaryButton}"
@@ -788,7 +797,7 @@
                                        FontSize="10"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="SQLite 只读"
+                            <TextBlock Text="{Binding DataSourceTypeText}"
                                        Foreground="{StaticResource SuccessBrush}"
                                        FontSize="10"
                                        HorizontalAlignment="Right"

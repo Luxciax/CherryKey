@@ -16,7 +16,7 @@ public sealed class AppSettingsStore
         _settingsPath = Path.Combine(directory, "settings.json");
     }
 
-    public string? LoadDatabasePath()
+    public string? LoadDataSourcePath()
     {
         try
         {
@@ -26,7 +26,7 @@ public sealed class AppSettingsStore
             }
 
             var settings = JsonSerializer.Deserialize<SettingsModel>(File.ReadAllText(_settingsPath));
-            return settings?.DatabasePath;
+            return settings?.DataSourcePath ?? settings?.DatabasePath;
         }
         catch
         {
@@ -34,14 +34,23 @@ public sealed class AppSettingsStore
         }
     }
 
-    public void SaveDatabasePath(string path)
+    public void SaveDataSourcePath(string path)
     {
-        var settings = new SettingsModel { DatabasePath = path };
+        var settings = new SettingsModel
+        {
+            DataSourcePath = path,
+            DatabasePath = path // Keep older CherryKey builds able to read the setting.
+        };
         File.WriteAllText(_settingsPath, JsonSerializer.Serialize(settings, JsonOptions));
     }
 
+    // Compatibility aliases for pre-v0.3 code and settings.
+    public string? LoadDatabasePath() => LoadDataSourcePath();
+    public void SaveDatabasePath(string path) => SaveDataSourcePath(path);
+
     private sealed class SettingsModel
     {
+        public string? DataSourcePath { get; init; }
         public string? DatabasePath { get; init; }
     }
 }
