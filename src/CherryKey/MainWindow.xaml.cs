@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using CherryKey.Services;
 using CherryKey.ViewModels;
 using WinForms = System.Windows.Forms;
@@ -25,6 +26,8 @@ public partial class MainWindow : Window, IDisposable
     private bool _disposed;
     private bool _trayReady;
 
+    public Task InitializationTask { get; private set; } = Task.CompletedTask;
+
     public MainWindow(bool disableTray = false)
     {
         _disableTray = disableTray;
@@ -44,10 +47,21 @@ public partial class MainWindow : Window, IDisposable
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        AppLog.Write("MainWindow Loaded event.");
+        AppLog.Write("MainWindow Loaded event. Scheduling background data-source discovery.");
+        FocusSearch();
+        InitializationTask = InitializeAfterFirstRenderAsync();
+    }
+
+    private async Task InitializeAfterFirstRenderAsync()
+    {
+        // Loaded runs inside Window.Show(). Yield first so the window can paint before any
+        // filesystem or LevelDB work starts. All discovery/reading is performed off the UI thread.
+        await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+
         try
         {
-            _viewModel.Initialize();
+            await _viewModel.InitializeAsync();
+            AppLog.Write("ViewModel background initialization completed.");
         }
         catch (Exception ex)
         {
@@ -58,8 +72,6 @@ public partial class MainWindow : Window, IDisposable
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
-
-        FocusSearch();
     }
 
     private void MainWindow_ContentRendered(object? sender, EventArgs e)

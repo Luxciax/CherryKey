@@ -80,7 +80,7 @@ jobs:
         shell: pwsh
         run: |
           @"
-          CherryKey v0.3.0
+          CherryKey v0.3.2
 
           推荐先运行本目录中的 CherryKey.exe。
           若双击后仍无窗口，请运行“诊断启动.cmd”，然后查看：

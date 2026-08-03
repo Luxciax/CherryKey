@@ -52,7 +52,7 @@
                                 Background="#171E30"
                                 BorderBrush="#28354C"
                                 Padding="7,2">
-                            <TextBlock Text="v0.3.0" FontSize="10" Foreground="#AAB6C8"/>
+                            <TextBlock Text="v0.3.2" FontSize="10" Foreground="#AAB6C8"/>
                         </Border>
                     </StackPanel>
 

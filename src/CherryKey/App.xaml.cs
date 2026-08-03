@@ -21,17 +21,39 @@ public partial class App : System.Windows.Application
 
         try
         {
+            if (smokeTest)
+            {
+                CherryV1LevelDbReader.RunDecoderSelfTest();
+                AppLog.Write("Cherry Studio v1 Local Storage parser self-test passed.");
+            }
+
             var window = new MainWindow(noTray);
             MainWindow = window;
 
             if (smokeTest)
             {
-                window.Measure(new Size(1440, 900));
-                window.Arrange(new Rect(0, 0, 1440, 900));
-                window.UpdateLayout();
-                AppLog.Write("Startup smoke test passed: MainWindow XAML loaded and layout completed.");
-                window.Dispose();
-                Shutdown(0);
+                // Show the real window so Loaded and the asynchronous discovery path are tested.
+                // The old smoke test only parsed XAML and therefore missed UI-thread hangs.
+                window.Show();
+                window.Activate();
+
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    try
+                    {
+                        await window.InitializationTask.WaitAsync(TimeSpan.FromSeconds(15));
+                        window.UpdateLayout();
+                        AppLog.Write("Startup smoke test passed: window rendered and background initialization completed.");
+                        window.Dispose();
+                        Shutdown(0);
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLog.Write("Startup smoke test failed.", ex);
+                        window.Dispose();
+                        Shutdown(-1);
+                    }
+                }));
                 return;
             }
 

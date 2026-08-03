@@ -29,6 +29,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _isBusy;
     private FileSystemWatcher? _watcher;
     private System.Threading.Timer? _refreshTimer;
+    private CancellationTokenSource? _operationCts;
     private bool _disposed;
 
     public MainViewModel()
@@ -37,8 +38,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ProvidersView = CollectionViewSource.GetDefaultView(Providers);
         ProvidersView.Filter = FilterProvider;
 
-        RefreshCommand = new RelayCommand(Refresh, () => !IsBusy);
-        RescanDatabaseCommand = new RelayCommand(RescanDatabase, () => !IsBusy);
+        RefreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsBusy);
+        RescanDatabaseCommand = new RelayCommand(() => _ = RescanDatabaseAsync(), () => !IsBusy);
         ChooseDatabaseCommand = new RelayCommand(ChooseDatabase, () => !IsBusy);
         CopyKeyCommand = new RelayCommand(CopyKey, HasProviderAndKey);
         ToggleKeyCommand = new RelayCommand(ToggleKey, HasProviderAndKey);
@@ -157,51 +158,98 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public event EventHandler? FocusSearchRequested;
 
-    public void Initialize() => RescanDatabase();
+    public Task InitializeAsync() => RescanDatabaseAsync();
 
     public void RequestFocusSearch() => FocusSearchRequested?.Invoke(this, EventArgs.Empty);
 
-    private void RescanDatabase()
+    private async Task RescanDatabaseAsync()
     {
         if (IsBusy)
         {
             return;
         }
 
+        var operation = BeginOperation(TimeSpan.FromSeconds(12));
+        var token = operation.Token;
         IsBusy = true;
+
         try
         {
             ConnectionStatus = "正在自动发现 Cherry Studio 数据源";
-            StatusMessage = "正在检查 v1 LevelDB、v2 SQLite、迁移配置、便携目录和正在运行的 Cherry Studio…";
+            StatusMessage = "正在后台检查 v1 LevelDB、v2 SQLite、迁移配置和便携目录；窗口不会被阻塞。";
+            AppLog.Write("Background data-source scan requested.");
 
-            DatabasePath = _locator.Locate() ?? string.Empty;
-            OnPropertyChanged(nameof(DatabaseDisplayPath));
+            var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            Exception? lastReadError = null;
 
-            if (string.IsNullOrWhiteSpace(DatabasePath))
+            for (var attempt = 1; attempt <= 4; attempt++)
             {
-                ClearProviders();
-                ConnectionStatus = "未发现 Cherry Studio 数据源";
-                StatusMessage = "已完成自动扫描。支持 v1 Local Storage\\leveldb 与 v2 Data\\cherrystudio.sqlite；仍未发现时请点击“选择数据源”。";
-                return;
+                token.ThrowIfCancellationRequested();
+                var candidate = await Task.Run(
+                    () => _locator.Locate(token, excluded),
+                    token);
+
+                OnPropertyChanged(nameof(DatabaseDisplayPath));
+                if (string.IsNullOrWhiteSpace(candidate))
+                {
+                    break;
+                }
+
+                var fullCandidate = Path.GetFullPath(candidate);
+                ConnectionStatus = $"正在读取 {CherryDataSource.GetDisplayName(fullCandidate)}";
+                StatusMessage = fullCandidate;
+                AppLog.Write($"Trying discovered data source (attempt {attempt}): {fullCandidate}");
+
+                try
+                {
+                    var records = await Task.Run(() => _reader.Read(fullCandidate))
+                        .WaitAsync(TimeSpan.FromSeconds(6), token);
+                    token.ThrowIfCancellationRequested();
+
+                    ApplyRecords(fullCandidate, records);
+                    _settings.SaveDataSourcePath(fullCandidate);
+                    AppLog.Write($"Data source loaded successfully. Providers={records.Count}; Path={fullCandidate}");
+                    return;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    lastReadError = ex;
+                    excluded.Add(fullCandidate);
+                    AppLog.Write($"Rejected discovered data source and continuing: {fullCandidate}", ex);
+                }
             }
 
-            _settings.SaveDataSourcePath(DatabasePath);
-            ReadDatabaseCore();
+            DatabasePath = string.Empty;
+            ClearProviders();
+            ConnectionStatus = "未发现可读取的 Cherry Studio 数据源";
+            StatusMessage = lastReadError is null
+                ? "快速扫描已完成。仍未发现时请点击“选择数据源”。"
+                : $"发现候选文件，但均无法解析：{lastReadError.Message}。详细诊断：{AppLog.LogPath}";
+        }
+        catch (OperationCanceledException)
+        {
+            DatabasePath = string.Empty;
+            ClearProviders();
+            ConnectionStatus = "自动扫描已停止";
+            StatusMessage = "自动扫描超过安全时限，已停止以避免界面卡死。请点击“选择数据源”手动指定。";
+            AppLog.Write("Background data-source scan timed out or was cancelled.");
         }
         catch (Exception ex)
         {
+            DatabasePath = string.Empty;
             ClearProviders();
             ConnectionStatus = "数据源扫描失败";
-            StatusMessage = ex.Message;
+            StatusMessage = $"{ex.Message}；详细诊断：{AppLog.LogPath}";
             AppLog.Write("Cherry data-source auto-discovery failed.", ex);
         }
         finally
         {
+            EndOperation(operation);
             IsBusy = false;
         }
     }
 
-    private void Refresh()
+    private async Task RefreshAsync()
     {
         if (IsBusy)
         {
@@ -210,31 +258,48 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (string.IsNullOrWhiteSpace(DatabasePath) || !CherryDataSource.IsValid(DatabasePath))
         {
-            RescanDatabase();
+            await RescanDatabaseAsync();
             return;
         }
 
+        var operation = BeginOperation(TimeSpan.FromSeconds(10));
+        var token = operation.Token;
         IsBusy = true;
+
         try
         {
-            ReadDatabaseCore();
+            ConnectionStatus = $"正在刷新 {CherryDataSource.GetDisplayName(DatabasePath)}";
+            var sourcePath = DatabasePath;
+            var records = await Task.Run(() => _reader.Read(sourcePath))
+                .WaitAsync(TimeSpan.FromSeconds(8), token);
+            token.ThrowIfCancellationRequested();
+            ApplyRecords(sourcePath, records);
+            _settings.SaveDataSourcePath(sourcePath);
+            AppLog.Write($"Data source refreshed successfully. Providers={records.Count}; Path={sourcePath}");
+        }
+        catch (OperationCanceledException)
+        {
+            ConnectionStatus = "刷新超时";
+            StatusMessage = "读取超过 10 秒，已停止等待；窗口仍可继续使用。";
+            AppLog.Write("Data-source refresh timed out or was cancelled.");
         }
         catch (Exception ex)
         {
             ConnectionStatus = "读取失败";
-            StatusMessage = ex.Message;
+            StatusMessage = $"{ex.Message}；详细诊断：{AppLog.LogPath}";
             AppLog.Write("Cherry data-source refresh failed.", ex);
         }
         finally
         {
+            EndOperation(operation);
             IsBusy = false;
         }
     }
 
-    private void ReadDatabaseCore()
+    private void ApplyRecords(string sourcePath, IReadOnlyList<ProviderRecord> records)
     {
         var selectedId = SelectedProvider?.Id;
-        var records = _reader.Read(DatabasePath);
+        DatabasePath = sourcePath;
 
         Providers.Clear();
         foreach (var provider in records)
@@ -254,8 +319,31 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SetupWatcher();
     }
 
+    private CancellationTokenSource BeginOperation(TimeSpan timeout)
+    {
+        _operationCts?.Cancel();
+        _operationCts?.Dispose();
+        var operation = new CancellationTokenSource(timeout);
+        _operationCts = operation;
+        return operation;
+    }
+
+    private void EndOperation(CancellationTokenSource operation)
+    {
+        if (ReferenceEquals(_operationCts, operation))
+        {
+            _operationCts = null;
+        }
+
+        operation.Dispose();
+    }
+
     private void ClearProviders()
     {
+        _watcher?.Dispose();
+        _watcher = null;
+        _refreshTimer?.Dispose();
+        _refreshTimer = null;
         Providers.Clear();
         SelectedProvider = null;
         ProvidersView.Refresh();
@@ -286,8 +374,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         DatabasePath = normalized!;
-        _settings.SaveDataSourcePath(DatabasePath);
-        Refresh();
+        _ = RefreshAsync();
     }
 
     private bool FilterProvider(object item)
@@ -471,7 +558,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _refreshTimer = new System.Threading.Timer(
-            _ => Application.Current.Dispatcher.Invoke(Refresh),
+            _ => Application.Current.Dispatcher.BeginInvoke(new Action(() => _ = RefreshAsync())),
             null,
             Timeout.Infinite,
             Timeout.Infinite);
@@ -523,6 +610,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
+        _operationCts?.Cancel();
+        _operationCts?.Dispose();
+        _operationCts = null;
         _watcher?.Dispose();
         _refreshTimer?.Dispose();
     }

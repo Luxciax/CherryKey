@@ -1,10 +1,20 @@
 # CherryKey
 
-> 当前版本：v0.3.0（Cherry Studio v1/v2 双数据源兼容版）
+> 当前版本：v0.3.2（v1 Local Storage 解析修复 + 启动卡死修复 + v1/v2 双数据源兼容版）
 
 CherryKey 是 Cherry Studio 的 Windows 本地 API 配置伴生工具。它只读 Cherry Studio 的本地配置，提供供应商搜索、API Key / Base URL / 模型 ID 快速复制，以及常见客户端配置模板。
 
-## v0.3.0 兼容范围
+## v0.3.2 修复重点
+
+- 正确解析 Chromium Local Storage 的 `_<origin>\0<script key>` 二进制键结构
+- 正确处理 `0x00 = UTF-16LE`、`0x01 = Latin-1`，不再把 Latin-1 当成 UTF-8
+- 优先读取 `persist:cherry-studio`，兼容 `persist:root` 与其他 `persist:*`
+- 每个候选都实际验证 `llm.providers`，不会再被错误 fallback 抢占
+- 自动检查 Electron `Partitions\*\Local Storage\leveldb`
+- 日志仅记录候选键名、编码和数量，不记录 JSON 内容或 API Key
+- 保留 v0.3.1 的后台扫描、限时读取、错误候选跳过和真实启动测试
+
+## v1/v2 兼容范围
 
 | Cherry Studio | 数据源 | Windows 默认位置 |
 |---|---|---|

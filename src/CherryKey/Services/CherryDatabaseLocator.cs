@@ -4,8 +4,9 @@ using System.Text.Json;
 namespace CherryKey.Services;
 
 /// <summary>
-/// Locates both Cherry Studio v1 Chromium Local Storage LevelDB and Cherry Studio v2 SQLite data.
-/// The class name is kept for source compatibility with older CherryKey builds.
+/// Locates Cherry Studio v1 Chromium Local Storage LevelDB and Cherry Studio v2 SQLite data.
+/// Discovery is deliberately bounded: known locations are checked first, then a small set of
+/// hints, and finally a short breadth-first fallback scan. It must never freeze the WPF UI.
 /// </summary>
 public sealed class CherryDatabaseLocator
 {
@@ -15,6 +16,7 @@ public sealed class CherryDatabaseLocator
         "CherryStudio2", "CherryStudio-V2"
     ];
 
+    private static readonly TimeSpan MaximumScanDuration = TimeSpan.FromSeconds(7);
     private readonly AppSettingsStore _settings;
 
     public CherryDatabaseLocator(AppSettingsStore settings)
@@ -25,16 +27,18 @@ public sealed class CherryDatabaseLocator
     public int LastScanCount { get; private set; }
     public string LastScanSummary { get; private set; } = "尚未扫描";
 
-    public string? Locate()
+    public string? Locate(
+        CancellationToken cancellationToken = default,
+        IReadOnlySet<string>? excludedPaths = null)
     {
+        var stopwatch = Stopwatch.StartNew();
         LastScanCount = 0;
+        LastScanSummary = "正在扫描";
+        AppLog.Write("Data-source discovery started.");
+
         var candidates = new List<Candidate>();
         var candidateSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var searchRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var savedPath = CherryDataSource.NormalizeSelectedPath(_settings.LoadDataSourcePath());
-        var savedPriority = CherryDataSource.GetKind(savedPath) == CherryDataSourceKind.V1LevelDb ? 18 : 0;
-        AddCandidate(candidates, candidateSet, savedPath, priority: savedPriority);
 
         var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -42,8 +46,10 @@ public sealed class CherryDatabaseLocator
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
+        // 1. Known deterministic locations. These are checked before any recursive work.
         foreach (var root in new[] { roaming, local, common })
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(root))
             {
                 continue;
@@ -53,7 +59,8 @@ public sealed class CherryDatabaseLocator
             {
                 var appRoot = Path.Combine(root, folderName);
                 AddSearchRoot(searchRoots, appRoot);
-                AddSourceVariants(candidates, candidateSet, appRoot, priority: 10);
+                AddSourceVariants(candidates, candidateSet, appRoot, priority: 0);
+                AddPartitionSourceVariants(candidates, candidateSet, searchRoots, appRoot, priority: 3);
             }
         }
 
@@ -67,7 +74,8 @@ public sealed class CherryDatabaseLocator
                      })
             {
                 AddSearchRoot(searchRoots, appRoot);
-                AddSourceVariants(candidates, candidateSet, appRoot, priority: 25);
+                AddSourceVariants(candidates, candidateSet, appRoot, priority: 8);
+                AddPartitionSourceVariants(candidates, candidateSet, searchRoots, appRoot, priority: 11);
             }
         }
 
@@ -75,55 +83,115 @@ public sealed class CherryDatabaseLocator
         {
             var appRoot = Path.Combine(documents, "CherryStudio");
             AddSearchRoot(searchRoots, appRoot);
-            AddSourceVariants(candidates, candidateSet, appRoot, priority: 30);
+            AddSourceVariants(candidates, candidateSet, appRoot, priority: 10);
         }
 
-        AddRunningCherryLocations(candidates, candidateSet, searchRoots);
-        AddTopLevelCherryDirectories(roaming, searchRoots);
-        AddTopLevelCherryDirectories(local, searchRoots);
+        // A saved custom path is useful, but it is tried after the official locations so an old
+        // invalid setting cannot hide a valid default v1/v2 data source.
+        var savedPath = CherryDataSource.NormalizeSelectedPath(_settings.LoadDataSourcePath());
+        AddCandidate(candidates, candidateSet, savedPath, priority: 20);
 
-        // Cherry Studio can relocate Electron userData. Small preboot/preferences JSON files
-        // in the original location may retain the custom path, so use those strings as hints.
-        foreach (var root in searchRoots.ToArray())
-        {
-            AddJsonPathHints(root, candidates, candidateSet, searchRoots);
-        }
-
-        var direct = FirstExisting(candidates);
+        var direct = FirstExisting(candidates, excludedPaths, cancellationToken);
         if (direct is not null)
         {
-            LastScanSummary = $"自动检查了 {LastScanCount} 个候选位置，识别为 {CherryDataSource.GetDisplayName(direct)}";
+            LastScanSummary = $"快速检查 {LastScanCount} 个已知位置后发现 {CherryDataSource.GetDisplayName(direct)}";
+            AppLog.Write($"Data-source discovery found known path: {direct}");
             return direct;
         }
 
-        foreach (var root in searchRoots.OrderBy(path => path.Length))
+        ThrowIfExpired(stopwatch, cancellationToken);
+
+        // 2. Running-process locations and top-level folders containing "cherry".
+        AddRunningCherryLocations(candidates, candidateSet, searchRoots, cancellationToken);
+        AddTopLevelCherryDirectories(roaming, searchRoots, cancellationToken);
+        AddTopLevelCherryDirectories(local, searchRoots, cancellationToken);
+
+        direct = FirstExisting(candidates, excludedPaths, cancellationToken);
+        if (direct is not null)
         {
-            foreach (var source in EnumerateDataSources(root, maxDepth: 6, maxDirectories: 3500))
+            LastScanSummary = $"检查 {LastScanCount} 个程序位置后发现 {CherryDataSource.GetDisplayName(direct)}";
+            AppLog.Write($"Data-source discovery found process-related path: {direct}");
+            return direct;
+        }
+
+        ThrowIfExpired(stopwatch, cancellationToken);
+
+        // 3. Read a bounded number of nearby JSON files for relocated userData hints.
+        foreach (var root in searchRoots.ToArray())
+        {
+            ThrowIfExpired(stopwatch, cancellationToken);
+            AddJsonPathHintsBounded(
+                root,
+                candidates,
+                candidateSet,
+                searchRoots,
+                cancellationToken,
+                maxDepth: 2,
+                maxDirectories: 120,
+                maxFiles: 60);
+        }
+
+        direct = FirstExisting(candidates, excludedPaths, cancellationToken);
+        if (direct is not null)
+        {
+            LastScanSummary = $"读取迁移配置后发现 {CherryDataSource.GetDisplayName(direct)}";
+            AppLog.Write($"Data-source discovery found JSON-hinted path: {direct}");
+            return direct;
+        }
+
+        ThrowIfExpired(stopwatch, cancellationToken);
+
+        // 4. Last-resort bounded BFS. Never scan an entire drive or thousands of deep folders.
+        foreach (var root in searchRoots.OrderBy(path => path.Length).ToArray())
+        {
+            ThrowIfExpired(stopwatch, cancellationToken);
+            foreach (var source in EnumerateDataSources(
+                         root,
+                         maxDepth: 4,
+                         maxDirectories: 500,
+                         stopwatch,
+                         cancellationToken))
             {
                 AddCandidate(candidates, candidateSet, source, priority: 100);
             }
         }
 
-        direct = FirstExisting(candidates);
+        direct = FirstExisting(candidates, excludedPaths, cancellationToken);
         LastScanSummary = direct is null
-            ? $"已扫描 {LastScanCount} 个候选位置，未发现 v1 LevelDB 或 v2 SQLite"
-            : $"自动扫描 {LastScanCount} 个候选位置后发现 {CherryDataSource.GetDisplayName(direct)}";
+            ? $"在 {stopwatch.Elapsed.TotalSeconds:0.0} 秒内检查 {LastScanCount} 个候选位置，未发现 v1/v2 数据源"
+            : $"在 {stopwatch.Elapsed.TotalSeconds:0.0} 秒内发现 {CherryDataSource.GetDisplayName(direct)}";
+        AppLog.Write($"Data-source discovery completed. Result={direct ?? "<none>"}; {LastScanSummary}");
         return direct;
     }
 
-    private string? FirstExisting(IEnumerable<Candidate> candidates)
+    private string? FirstExisting(
+        IEnumerable<Candidate> candidates,
+        IReadOnlySet<string>? excludedPaths,
+        CancellationToken cancellationToken)
     {
         foreach (var candidate in candidates
                      .OrderBy(item => item.Priority)
                      .ThenBy(item => item.Path.Length))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             LastScanCount++;
             try
             {
                 var normalized = CherryDataSource.NormalizeSelectedPath(candidate.Path);
-                if (CherryDataSource.IsValid(normalized))
+                if (string.IsNullOrWhiteSpace(normalized))
                 {
-                    return Path.GetFullPath(normalized!);
+                    continue;
+                }
+
+                var fullPath = Path.GetFullPath(normalized);
+                if (excludedPaths?.Contains(fullPath) == true)
+                {
+                    continue;
+                }
+
+                if (CherryDataSource.IsValid(fullPath))
+                {
+                    return fullPath;
                 }
             }
             catch
@@ -155,13 +223,60 @@ public sealed class CherryDatabaseLocator
         AddCandidate(candidates, candidateSet, Path.Combine(root, "data", "Local Storage", "leveldb"), priority + 6);
     }
 
+    private static void AddPartitionSourceVariants(
+        List<Candidate> candidates,
+        HashSet<string> candidateSet,
+        HashSet<string> searchRoots,
+        string appRoot,
+        int priority)
+    {
+        var partitionsRoot = Path.Combine(appRoot, "Partitions");
+        if (!Directory.Exists(partitionsRoot))
+        {
+            return;
+        }
+
+        try
+        {
+            var count = 0;
+            foreach (var partition in Directory.EnumerateDirectories(
+                         partitionsRoot,
+                         "*",
+                         SearchOption.TopDirectoryOnly))
+            {
+                if (++count > 32)
+                {
+                    break;
+                }
+
+                AddSearchRoot(searchRoots, partition);
+                AddCandidate(
+                    candidates,
+                    candidateSet,
+                    Path.Combine(partition, "Local Storage", "leveldb"),
+                    priority);
+                AddCandidate(
+                    candidates,
+                    candidateSet,
+                    Path.Combine(partition, "Data", CherryDataSource.SqliteFileName),
+                    priority);
+            }
+        }
+        catch
+        {
+            // Partition discovery is optional; bounded BFS and manual selection remain available.
+        }
+    }
+
     private static void AddRunningCherryLocations(
         List<Candidate> candidates,
         HashSet<string> candidateSet,
-        HashSet<string> searchRoots)
+        HashSet<string> searchRoots,
+        CancellationToken cancellationToken)
     {
         foreach (var process in Process.GetProcesses())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 if (!process.ProcessName.Contains("cherry", StringComparison.OrdinalIgnoreCase))
@@ -177,13 +292,13 @@ public sealed class CherryDatabaseLocator
                 }
 
                 AddSearchRoot(searchRoots, directory);
-                AddSourceVariants(candidates, candidateSet, directory, priority: 15);
+                AddSourceVariants(candidates, candidateSet, directory, priority: 12);
 
                 var parent = Directory.GetParent(directory);
                 if (parent is not null)
                 {
                     AddSearchRoot(searchRoots, parent.FullName);
-                    AddSourceVariants(candidates, candidateSet, parent.FullName, priority: 16);
+                    AddSourceVariants(candidates, candidateSet, parent.FullName, priority: 13);
                 }
             }
             catch
@@ -197,7 +312,10 @@ public sealed class CherryDatabaseLocator
         }
     }
 
-    private static void AddTopLevelCherryDirectories(string root, HashSet<string> searchRoots)
+    private static void AddTopLevelCherryDirectories(
+        string root,
+        HashSet<string> searchRoots,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
         {
@@ -208,6 +326,7 @@ public sealed class CherryDatabaseLocator
         {
             foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (Path.GetFileName(directory).Contains("cherry", StringComparison.OrdinalIgnoreCase))
                 {
                     AddSearchRoot(searchRoots, directory);
@@ -220,47 +339,94 @@ public sealed class CherryDatabaseLocator
         }
     }
 
-    private static void AddJsonPathHints(
+    private static void AddJsonPathHintsBounded(
         string root,
         List<Candidate> candidates,
         HashSet<string> candidateSet,
-        HashSet<string> searchRoots)
+        HashSet<string> searchRoots,
+        CancellationToken cancellationToken,
+        int maxDepth,
+        int maxDirectories,
+        int maxFiles)
     {
         if (!Directory.Exists(root))
         {
             return;
         }
 
-        IEnumerable<string> files;
-        try
-        {
-            files = Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories).Take(200).ToArray();
-        }
-        catch
-        {
-            return;
-        }
+        var queue = new Queue<(string Path, int Depth)>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        queue.Enqueue((root, 0));
+        var directoryCount = 0;
+        var fileCount = 0;
 
-        foreach (var file in files)
+        while (queue.Count > 0 && directoryCount < maxDirectories && fileCount < maxFiles)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var (directory, depth) = queue.Dequeue();
+            if (!visited.Add(directory))
+            {
+                continue;
+            }
+
+            directoryCount++;
             try
             {
-                var info = new FileInfo(file);
-                if (info.Length > 2 * 1024 * 1024)
+                foreach (var file in Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (++fileCount > maxFiles)
+                    {
+                        break;
+                    }
+
+                    TryReadJsonPathHints(file, candidates, candidateSet, searchRoots);
+                }
+
+                if (depth >= maxDepth)
                 {
                     continue;
                 }
 
-                using var document = JsonDocument.Parse(File.ReadAllText(file));
-                foreach (var value in EnumerateStrings(document.RootElement))
+                foreach (var child in Directory.EnumerateDirectories(directory, "*", SearchOption.TopDirectoryOnly))
                 {
-                    AddPathHint(value, Path.GetDirectoryName(file), candidates, candidateSet, searchRoots);
+                    var name = Path.GetFileName(child);
+                    if (!ShouldSkipDirectory(name))
+                    {
+                        queue.Enqueue((child, depth + 1));
+                    }
                 }
             }
             catch
             {
-                // Ignore unrelated or malformed JSON.
+                // Ignore inaccessible folders.
             }
+        }
+    }
+
+    private static void TryReadJsonPathHints(
+        string file,
+        List<Candidate> candidates,
+        HashSet<string> candidateSet,
+        HashSet<string> searchRoots)
+    {
+        try
+        {
+            var info = new FileInfo(file);
+            if (info.Length > 1024 * 1024)
+            {
+                return;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(file));
+            foreach (var value in EnumerateStrings(document.RootElement))
+            {
+                AddPathHint(value, Path.GetDirectoryName(file), candidates, candidateSet, searchRoots);
+            }
+        }
+        catch
+        {
+            // Ignore unrelated or malformed JSON.
         }
     }
 
@@ -275,19 +441,19 @@ public sealed class CherryDatabaseLocator
                     yield return value;
                 }
                 break;
-            case JsonValueKind.Array:
-                foreach (var item in element.EnumerateArray())
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
                 {
-                    foreach (var nested in EnumerateStrings(item))
+                    foreach (var nested in EnumerateStrings(property.Value))
                     {
                         yield return nested;
                     }
                 }
                 break;
-            case JsonValueKind.Object:
-                foreach (var property in element.EnumerateObject())
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
                 {
-                    foreach (var nested in EnumerateStrings(property.Value))
+                    foreach (var nested in EnumerateStrings(item))
                     {
                         yield return nested;
                     }
@@ -336,7 +502,12 @@ public sealed class CherryDatabaseLocator
         AddSourceVariants(candidates, candidateSet, expanded, priority: 5);
     }
 
-    private static IEnumerable<string> EnumerateDataSources(string root, int maxDepth, int maxDirectories)
+    private static IEnumerable<string> EnumerateDataSources(
+        string root,
+        int maxDepth,
+        int maxDirectories,
+        Stopwatch stopwatch,
+        CancellationToken cancellationToken)
     {
         if (!Directory.Exists(root))
         {
@@ -350,6 +521,7 @@ public sealed class CherryDatabaseLocator
 
         while (queue.Count > 0 && directoryCount < maxDirectories)
         {
+            ThrowIfExpired(stopwatch, cancellationToken);
             var (directory, depth) = queue.Dequeue();
             if (!visited.Add(directory))
             {
@@ -357,7 +529,6 @@ public sealed class CherryDatabaseLocator
             }
 
             directoryCount++;
-
             var sqlite = Path.Combine(directory, CherryDataSource.SqliteFileName);
             if (File.Exists(sqlite))
             {
@@ -376,26 +547,30 @@ public sealed class CherryDatabaseLocator
                 continue;
             }
 
-            IEnumerable<string> children;
             try
             {
-                children = Directory.EnumerateDirectories(directory, "*", SearchOption.TopDirectoryOnly).ToArray();
+                foreach (var child in Directory.EnumerateDirectories(directory, "*", SearchOption.TopDirectoryOnly))
+                {
+                    var name = Path.GetFileName(child);
+                    if (!ShouldSkipDirectory(name))
+                    {
+                        queue.Enqueue((child, depth + 1));
+                    }
+                }
             }
             catch
             {
-                continue;
+                // Ignore inaccessible folders.
             }
+        }
+    }
 
-            foreach (var child in children)
-            {
-                var name = Path.GetFileName(child);
-                if (ShouldSkipDirectory(name))
-                {
-                    continue;
-                }
-
-                queue.Enqueue((child, depth + 1));
-            }
+    private static void ThrowIfExpired(Stopwatch stopwatch, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (stopwatch.Elapsed > MaximumScanDuration)
+        {
+            throw new OperationCanceledException("Cherry Studio 数据源扫描超过 7 秒，已停止深度扫描。", null, cancellationToken);
         }
     }
 
