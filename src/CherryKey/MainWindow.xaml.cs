@@ -15,15 +15,20 @@ public partial class MainWindow : Window, IDisposable
     private const uint VkK = 0x4B;
     private const int WmHotkey = 0x0312;
 
-    private readonly MainViewModel _viewModel = new();
+    private readonly MainViewModel _viewModel;
+    private readonly bool _enableTray;
     private WinForms.NotifyIcon? _notifyIcon;
     private HwndSource? _source;
     private bool _allowExit;
     private bool _disposed;
 
-    public MainWindow()
+    public MainWindow(bool enableTray = true)
     {
+        _enableTray = enableTray;
+
         InitializeComponent();
+
+        _viewModel = new MainViewModel();
         DataContext = _viewModel;
 
         Loaded += MainWindow_Loaded;
@@ -35,17 +40,56 @@ public partial class MainWindow : Window, IDisposable
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        InitializeTray();
-        _viewModel.Initialize();
+        App.WriteLog("MainWindow Loaded event started.");
+
+        if (_enableTray)
+        {
+            try
+            {
+                InitializeTray();
+            }
+            catch (Exception ex)
+            {
+                App.WriteLog("Tray initialization failed; continuing without tray.", ex);
+            }
+        }
+
+        try
+        {
+            _viewModel.Initialize();
+        }
+        catch (Exception ex)
+        {
+            App.WriteLog("ViewModel initialization failed; window remains available.", ex);
+            System.Windows.MessageBox.Show(
+                this,
+                $"读取 Cherry Studio 配置时发生错误，但程序窗口仍可使用。\n\n{ex.Message}\n\n日志：\n{App.LogFilePath}",
+                "CherryKey",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
         FocusSearch();
+        App.WriteLog("MainWindow Loaded event completed.");
     }
 
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
     {
-        var handle = new WindowInteropHelper(this).Handle;
-        _source = HwndSource.FromHwnd(handle);
-        _source?.AddHook(WndProc);
-        RegisterHotKey(handle, HotkeyId, ModControl | ModShift, VkK);
+        try
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            _source = HwndSource.FromHwnd(handle);
+            _source?.AddHook(WndProc);
+
+            if (!RegisterHotKey(handle, HotkeyId, ModControl | ModShift, VkK))
+            {
+                App.WriteLog("Global hotkey registration failed; the window can still be used normally.");
+            }
+        }
+        catch (Exception ex)
+        {
+            App.WriteLog("Window source initialization failed; continuing without global hotkey.", ex);
+        }
     }
 
     private void InitializeTray()
@@ -58,7 +102,7 @@ public partial class MainWindow : Window, IDisposable
         };
 
         var menu = new WinForms.ContextMenuStrip();
-        menu.Items.Add("打开 CherryKey", null, (_, _) => ShowFromTray());
+        menu.Items.Add("打开 CherryKey", null, (_, _) => Dispatcher.Invoke(ShowFromTray));
         menu.Items.Add("刷新", null, (_, _) => Dispatcher.Invoke(() => _viewModel.RefreshCommand.Execute(null)));
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(ExitApplication));
@@ -69,19 +113,23 @@ public partial class MainWindow : Window, IDisposable
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        if (_allowExit)
+        if (_allowExit || !_enableTray)
         {
             return;
         }
 
         e.Cancel = true;
         Hide();
-        _notifyIcon?.ShowBalloonTip(1200, "CherryKey", "程序仍在托盘运行，按 Ctrl + Shift + K 可快速打开。", WinForms.ToolTipIcon.Info);
+        _notifyIcon?.ShowBalloonTip(
+            1200,
+            "CherryKey",
+            "程序仍在托盘运行，按 Ctrl + Shift + K 可快速打开。",
+            WinForms.ToolTipIcon.Info);
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
     {
-        if (WindowState == WindowState.Minimized)
+        if (_enableTray && WindowState == WindowState.Minimized)
         {
             Hide();
         }
@@ -106,7 +154,6 @@ public partial class MainWindow : Window, IDisposable
     private void ExitApplication()
     {
         _allowExit = true;
-        Close();
         System.Windows.Application.Current.Shutdown();
     }
 

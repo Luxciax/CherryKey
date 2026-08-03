@@ -433,7 +433,7 @@
                 <TextBlock Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
                            Foreground="{StaticResource MutedBrush}">
                     <Run Text="最后刷新："/>
-                    <Run Text="{Binding LastRefreshText}"/>
+                    <Run Text="{Binding LastRefreshText, Mode=OneWay}"/>
                     <Run Text="　"/>
                     <Run Text="↻ 自动刷新已开启" Foreground="{StaticResource SuccessBrush}"/>
                 </TextBlock>

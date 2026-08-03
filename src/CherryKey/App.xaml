@@ -1,8 +1,7 @@
 <Application x:Class="CherryKey.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml"
-             ShutdownMode="OnExplicitShutdown">
+             ShutdownMode="OnMainWindowClose">
     <Application.Resources>
         <Color x:Key="WindowColor">#0B1018</Color>
         <Color x:Key="PanelColor">#111925</Color>
