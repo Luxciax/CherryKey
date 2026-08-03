@@ -22,72 +22,47 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore and build
-        shell: pwsh
-        run: |
-          dotnet restore CherryKey.sln
-          dotnet build CherryKey.sln -c Release --no-restore
+      - name: Restore
+        run: dotnet restore CherryKey.sln
 
-      - name: Publish portable win-x64
+      - name: Publish stable portable build
         shell: pwsh
         run: |
           dotnet publish src/CherryKey/CherryKey.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
+            --no-restore `
             -p:PublishSingleFile=false `
             -p:DebugType=None `
             -p:DebugSymbols=false `
-            -o artifacts/portable
+            -o artifacts/CherryKey-portable
 
-      - name: Startup smoke test
-        shell: pwsh
-        run: |
-          $exe = Resolve-Path "artifacts/portable/CherryKey.exe"
           $process = Start-Process `
-            -FilePath $exe `
+            -FilePath "artifacts/CherryKey-portable/CherryKey.exe" `
             -ArgumentList "--smoke-test", "--no-tray" `
+            -Wait `
             -PassThru
+          if ($process.ExitCode -ne 0) { throw "Startup smoke test failed." }
 
-          if (-not $process.WaitForExit(20000)) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            throw "CherryKey smoke test timed out."
-          }
+          Compress-Archive -Path artifacts/CherryKey-portable/* -DestinationPath artifacts/CherryKey-portable-win-x64.zip -Force
 
-          $log = Join-Path $env:LOCALAPPDATA "CherryKey/Logs/startup.log"
-          if (Test-Path $log) {
-            Get-Content $log
-          }
-
-          if ($process.ExitCode -ne 0) {
-            throw "CherryKey smoke test failed with exit code $($process.ExitCode)."
-          }
-
-      - name: Publish single-file win-x64
+      - name: Publish single-file build
         shell: pwsh
         run: |
           dotnet publish src/CherryKey/CherryKey.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
+            --no-restore `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:PublishReadyToRun=false `
             -p:DebugType=None `
             -p:DebugSymbols=false `
-            -o artifacts/single-file
+            -o artifacts/CherryKey-single-file
 
-      - name: Package
-        shell: pwsh
-        run: |
-          Compress-Archive `
-            -Path artifacts/portable/* `
-            -DestinationPath artifacts/CherryKey-portable-win-x64.zip `
-            -Force
-
-          Compress-Archive `
-            -Path artifacts/single-file/* `
-            -DestinationPath artifacts/CherryKey-single-file-win-x64.zip `
-            -Force
+          Compress-Archive -Path artifacts/CherryKey-single-file/* -DestinationPath artifacts/CherryKey-single-file-win-x64.zip -Force
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

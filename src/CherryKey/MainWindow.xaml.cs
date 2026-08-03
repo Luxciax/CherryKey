@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using CherryKey.Services;
 using CherryKey.ViewModels;
 using WinForms = System.Windows.Forms;
 
@@ -16,22 +17,25 @@ public partial class MainWindow : Window, IDisposable
     private const int WmHotkey = 0x0312;
 
     private readonly MainViewModel _viewModel;
-    private readonly bool _enableTray;
+    private readonly bool _disableTray;
     private WinForms.NotifyIcon? _notifyIcon;
+    private System.Drawing.Icon? _trayIcon;
     private HwndSource? _source;
     private bool _allowExit;
     private bool _disposed;
+    private bool _trayReady;
 
-    public MainWindow(bool enableTray = true)
+    public MainWindow(bool disableTray = false)
     {
-        _enableTray = enableTray;
+        _disableTray = disableTray;
+        AppLog.Write($"Constructing MainWindow. disableTray={disableTray}.");
 
         InitializeComponent();
-
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
 
         Loaded += MainWindow_Loaded;
+        ContentRendered += MainWindow_ContentRendered;
         SourceInitialized += MainWindow_SourceInitialized;
         Closing += MainWindow_Closing;
         StateChanged += MainWindow_StateChanged;
@@ -40,37 +44,44 @@ public partial class MainWindow : Window, IDisposable
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        App.WriteLog("MainWindow Loaded event started.");
-
-        if (_enableTray)
-        {
-            try
-            {
-                InitializeTray();
-            }
-            catch (Exception ex)
-            {
-                App.WriteLog("Tray initialization failed; continuing without tray.", ex);
-            }
-        }
-
+        AppLog.Write("MainWindow Loaded event.");
         try
         {
             _viewModel.Initialize();
         }
         catch (Exception ex)
         {
-            App.WriteLog("ViewModel initialization failed; window remains available.", ex);
-            System.Windows.MessageBox.Show(
-                this,
-                $"读取 Cherry Studio 配置时发生错误，但程序窗口仍可使用。\n\n{ex.Message}\n\n日志：\n{App.LogFilePath}",
+            AppLog.Write("ViewModel initialization failed.", ex);
+            MessageBox.Show(
+                $"读取 Cherry Studio 配置时发生错误：\n\n{ex.Message}\n\n窗口仍可使用，请手动选择数据库。",
                 "CherryKey",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
 
         FocusSearch();
-        App.WriteLog("MainWindow Loaded event completed.");
+    }
+
+    private void MainWindow_ContentRendered(object? sender, EventArgs e)
+    {
+        AppLog.Write("MainWindow ContentRendered event.");
+        if (_disableTray || _trayReady)
+        {
+            return;
+        }
+
+        // Tray support is optional. A tray failure must never prevent the main window from appearing.
+        try
+        {
+            InitializeTray();
+            _trayReady = true;
+            AppLog.Write("Tray icon initialized.");
+        }
+        catch (Exception ex)
+        {
+            _trayReady = false;
+            AppLog.Write("Tray initialization failed; continuing without tray support.", ex);
+        }
     }
 
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
@@ -80,24 +91,34 @@ public partial class MainWindow : Window, IDisposable
             var handle = new WindowInteropHelper(this).Handle;
             _source = HwndSource.FromHwnd(handle);
             _source?.AddHook(WndProc);
-
-            if (!RegisterHotKey(handle, HotkeyId, ModControl | ModShift, VkK))
-            {
-                App.WriteLog("Global hotkey registration failed; the window can still be used normally.");
-            }
+            var registered = RegisterHotKey(handle, HotkeyId, ModControl | ModShift, VkK);
+            AppLog.Write($"Global hotkey registration result={registered}.");
         }
         catch (Exception ex)
         {
-            App.WriteLog("Window source initialization failed; continuing without global hotkey.", ex);
+            AppLog.Write("Global hotkey initialization failed; continuing without it.", ex);
         }
     }
 
     private void InitializeTray()
     {
+        try
+        {
+            var executablePath = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(executablePath))
+            {
+                _trayIcon = System.Drawing.Icon.ExtractAssociatedIcon(executablePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write("Unable to load the embedded CherryKey icon for the tray.", ex);
+        }
+
         _notifyIcon = new WinForms.NotifyIcon
         {
             Text = "CherryKey",
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = _trayIcon ?? System.Drawing.SystemIcons.Application,
             Visible = true
         };
 
@@ -113,36 +134,51 @@ public partial class MainWindow : Window, IDisposable
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        if (_allowExit || !_enableTray)
+        if (_allowExit)
         {
+            return;
+        }
+
+        // Never make the application disappear without a recovery path.
+        if (!_trayReady || _notifyIcon is null)
+        {
+            _allowExit = true;
             return;
         }
 
         e.Cancel = true;
         Hide();
-        _notifyIcon?.ShowBalloonTip(
-            1200,
-            "CherryKey",
-            "程序仍在托盘运行，按 Ctrl + Shift + K 可快速打开。",
-            WinForms.ToolTipIcon.Info);
+        AppLog.Write("Main window hidden to tray.");
+        try
+        {
+            _notifyIcon.ShowBalloonTip(1200, "CherryKey", "程序仍在托盘运行，按 Ctrl + Shift + K 可快速打开。", WinForms.ToolTipIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write("Unable to display tray balloon.", ex);
+        }
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
     {
-        if (_enableTray && WindowState == WindowState.Minimized)
+        if (WindowState == WindowState.Minimized && _trayReady)
         {
             Hide();
+            AppLog.Write("Main window minimized to tray.");
         }
     }
 
     private void ShowFromTray()
     {
+        ShowInTaskbar = true;
         Show();
         WindowState = WindowState.Normal;
+        Visibility = Visibility.Visible;
         Activate();
         Topmost = true;
         Topmost = false;
         FocusSearch();
+        AppLog.Write("Main window restored from tray/hotkey.");
     }
 
     private void FocusSearch()
@@ -154,7 +190,8 @@ public partial class MainWindow : Window, IDisposable
     private void ExitApplication()
     {
         _allowExit = true;
-        System.Windows.Application.Current.Shutdown();
+        Close();
+        Application.Current.Shutdown();
     }
 
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
@@ -193,10 +230,17 @@ public partial class MainWindow : Window, IDisposable
         _disposed = true;
         _viewModel.Dispose();
 
-        var handle = new WindowInteropHelper(this).Handle;
-        if (handle != nint.Zero)
+        try
         {
-            UnregisterHotKey(handle, HotkeyId);
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle != nint.Zero)
+            {
+                UnregisterHotKey(handle, HotkeyId);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write("Failed to unregister hotkey.", ex);
         }
 
         if (_source is not null)
@@ -210,5 +254,7 @@ public partial class MainWindow : Window, IDisposable
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
         }
+
+        _trayIcon?.Dispose();
     }
 }

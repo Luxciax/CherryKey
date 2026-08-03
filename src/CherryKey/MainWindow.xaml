@@ -3,443 +3,894 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="CherryKey"
-        Width="1440" Height="900"
+        Icon="Assets/CherryKey.ico"
+        Width="1360" Height="840"
         MinWidth="1080" MinHeight="680"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         Background="{StaticResource WindowBrush}"
         Foreground="{StaticResource TextBrush}">
     <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="56" ResizeBorderThickness="7"
-                            CornerRadius="0" GlassFrameThickness="0"/>
+        <shell:WindowChrome CaptionHeight="52"
+                            ResizeBorderThickness="7"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"/>
     </shell:WindowChrome.WindowChrome>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="56"/>
-            <RowDefinition Height="74"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="38"/>
-        </Grid.RowDefinitions>
+    <Border Background="{StaticResource WindowBrush}"
+            BorderBrush="#26334A"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-        <!-- Title bar -->
-        <Border Grid.Row="0" Background="#0D141E" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-            <Grid Margin="18,0,0,0">
+            <!-- 顶部标题栏 -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource TitleBarBrush}"
+                    BorderBrush="{StaticResource BorderSoftBrush}"
+                    BorderThickness="0,0,0,1">
+                <Grid Margin="14,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="46"/>
+                        <ColumnDefinition Width="46"/>
+                        <ColumnDefinition Width="46"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="32" Height="32" CornerRadius="9" ClipToBounds="True">
+                            <Image Source="Assets/CherryKey.png" Stretch="UniformToFill"/>
+                        </Border>
+                        <TextBlock Text="CherryKey"
+                                   FontSize="19"
+                                   FontWeight="SemiBold"
+                                   Margin="10,0,8,0"
+                                   VerticalAlignment="Center"/>
+                        <Border Style="{StaticResource Pill}"
+                                Background="#171E30"
+                                BorderBrush="#28354C"
+                                Padding="7,2">
+                            <TextBlock Text="v0.2.0" FontSize="10" Foreground="#AAB6C8"/>
+                        </Border>
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                            Style="{StaticResource WindowButton}"
+                            Content="—"
+                            Click="Minimize_Click"/>
+                    <Button Grid.Column="2"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                            Style="{StaticResource WindowButton}"
+                            Content="□"
+                            Click="Maximize_Click"/>
+                    <Button Grid.Column="3"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                            Style="{StaticResource WindowButton}"
+                            Content="×"
+                            Click="Close_Click"/>
+                </Grid>
+            </Border>
+
+            <!-- 三栏主体 -->
+            <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="350"/>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="46"/>
-                    <ColumnDefinition Width="46"/>
-                    <ColumnDefinition Width="46"/>
+                    <ColumnDefinition Width="302"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="31" Height="31" CornerRadius="9" Background="{StaticResource AccentBrush}">
-                        <TextBlock Text="🍒" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Text="CherryKey" FontSize="20" FontWeight="SemiBold" Margin="11,0,9,0" VerticalAlignment="Center"/>
-                    <Border Background="#252F3C" CornerRadius="12" Padding="8,3" VerticalAlignment="Center">
-                        <TextBlock Text="v0.1.0" Foreground="#BBC6D4" FontSize="11"/>
-                    </Border>
-                </StackPanel>
-
-                <Button Grid.Column="1" shell:WindowChrome.IsHitTestVisibleInChrome="True"
-                        Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0"
-                        Content="—" Click="Minimize_Click"/>
-                <Button Grid.Column="2" shell:WindowChrome.IsHitTestVisibleInChrome="True"
-                        Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0"
-                        Content="□" Click="Maximize_Click"/>
-                <Button Grid.Column="3" shell:WindowChrome.IsHitTestVisibleInChrome="True"
-                        Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0"
-                        Content="×" Click="Close_Click"/>
-            </Grid>
-        </Border>
-
-        <!-- Toolbar -->
-        <Grid Grid.Row="1" Background="#101824">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="370"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="310"/>
-            </Grid.ColumnDefinitions>
-
-            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,1" Padding="18,15">
-                <Grid>
-                    <TextBox x:Name="SearchBox"
-                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Padding="38,10,85,10"
-                             VerticalContentAlignment="Center"/>
-                    <TextBlock Text="⌕" FontSize="20" Foreground="{StaticResource MutedBrush}"
-                               Margin="13,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-                    <Border HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,9,0"
-                            Background="#253041" BorderBrush="#435168" BorderThickness="1"
-                            CornerRadius="6" Padding="7,2" IsHitTestVisible="False">
-                        <TextBlock Text="Ctrl + K" FontSize="11" Foreground="#B7C1CE"/>
-                    </Border>
-                </Grid>
-            </Border>
-
-            <Border Grid.Column="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-                <Grid Margin="20,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="46"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Border Width="42" Height="42" Background="#173326" CornerRadius="10" VerticalAlignment="Center">
-                        <Ellipse Width="13" Height="13" Fill="{StaticResource SuccessBrush}"/>
-                    </Border>
-                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding ConnectionStatus}" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding DatabasePath}" Foreground="{StaticResource MutedBrush}"
-                                   FontSize="11" TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <Border Grid.Column="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,18,0">
-                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding RefreshCommand}"
-                            Content="↻  刷新" Margin="0,0,10,0"/>
-                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ChooseDatabaseCommand}"
-                            Content="⚙  选择数据库"/>
-                </StackPanel>
-            </Border>
-        </Grid>
-
-        <!-- Main layout -->
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="370"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="330"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Provider list -->
-            <Border Grid.Column="0" Background="#0E1621" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
-                <Grid Margin="17">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="43"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+                <!-- 左侧供应商栏 -->
+                <Border Grid.Column="0"
+                        Background="{StaticResource SidebarBrush}"
+                        BorderBrush="{StaticResource BorderSoftBrush}"
+                        BorderThickness="0,0,1,0">
                     <Grid>
-                        <TextBlock Text="供应商列表" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <Border HorizontalAlignment="Right" Background="{StaticResource AccentBrush}"
-                                Width="34" Height="34" CornerRadius="8" ToolTip="只读模式：请在 Cherry Studio 添加">
-                            <TextBlock Text="＋" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="78"/>
+                            <RowDefinition Height="1"/>
+                            <RowDefinition Height="58"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="58"/>
+                        </Grid.RowDefinitions>
 
-                    <ListBox Grid.Row="1"
-                             ItemsSource="{Binding ProvidersView}"
-                             SelectedItem="{Binding SelectedProvider}"
-                             Background="Transparent" BorderThickness="0"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="46"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="18"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="42" Height="42" CornerRadius="10"
-                                            Background="#3A286F" BorderBrush="#7654D5" BorderThickness="1">
-                                        <TextBlock Text="{Binding Initial}" FontWeight="Bold" FontSize="16"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" Margin="11,0,8,0">
-                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding ProtocolDisplay}" Foreground="{StaticResource MutedBrush}"
-                                                   FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding ModelSummary}" Foreground="#8290A2"
-                                                   FontSize="11" TextTrimming="CharacterEllipsis"/>
-                                    </StackPanel>
-                                    <Ellipse Grid.Column="2" Width="10" Height="10"
-                                             Fill="{StaticResource SuccessBrush}" VerticalAlignment="Top" Margin="0,4,0,0"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
-            </Border>
-
-            <!-- Details -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <Grid Margin="18">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <Grid Margin="2,0,2,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding SelectedProvider.Name, TargetNullValue=请选择供应商}"
-                                       FontSize="25" FontWeight="SemiBold"/>
-                            <Border Background="#34245C" BorderBrush="#59408D" BorderThickness="1"
-                                    CornerRadius="13" Padding="9,4" Margin="12,0,0,0">
-                                <TextBlock Text="{Binding SelectedProvider.ProtocolDisplay}" Foreground="#C9ADFF" FontSize="11"/>
+                        <Grid Grid.Row="0" Margin="16,13">
+                            <TextBox x:Name="SearchBox"
+                                     Style="{StaticResource SearchTextBox}"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Text="⌕"
+                                       FontSize="20"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       Margin="13,0,0,0"
+                                       VerticalAlignment="Center"
+                                       IsHitTestVisible="False"/>
+                            <TextBlock Text="搜索供应商 / 模型 / 备注…"
+                                       Foreground="#74839A"
+                                       Margin="39,0,0,0"
+                                       VerticalAlignment="Center"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <Border HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,8,0"
+                                    Background="#202B3D"
+                                    BorderBrush="#394963"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="7,2"
+                                    IsHitTestVisible="False">
+                                <TextBlock Text="Ctrl + K" FontSize="10" Foreground="#AAB5C5"/>
                             </Border>
-                        </StackPanel>
-                        <TextBlock Grid.Column="1" Text="只读" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                    </Grid>
+                        </Grid>
 
-                    <TabControl Grid.Row="1">
-                        <TabItem Header="▣  基本信息">
-                            <StackPanel Margin="0,14,0,0">
-                                <Border Style="{StaticResource Card}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="180"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="45"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="44"/>
-                                            <RowDefinition Height="44"/>
-                                            <RowDefinition Height="54"/>
-                                            <RowDefinition Height="44"/>
-                                        </Grid.RowDefinitions>
+                        <Border Grid.Row="1" Background="{StaticResource BorderSoftBrush}"/>
 
-                                        <TextBlock Text="供应商名称" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding SelectedProvider.Name}" VerticalAlignment="Center"/>
+                        <Grid Grid.Row="2" Margin="18,0,16,0">
+                            <TextBlock Text="供应商列表"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                            <Border HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Width="34" Height="34"
+                                    Background="{StaticResource AccentGradient}"
+                                    CornerRadius="8"
+                                    ToolTip="只读模式：请在 Cherry Studio 中添加供应商">
+                                <TextBlock Text="＋"
+                                           FontSize="21"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
 
-                                        <TextBlock Grid.Row="1" Text="协议类型" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedProvider.ProtocolDisplay}" VerticalAlignment="Center"/>
-
-                                        <TextBlock Grid.Row="2" Text="Base URL" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedProvider.BaseUrlDisplay}"
-                                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                        <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource IconButton}"
-                                                Command="{Binding CopyBaseUrlCommand}" Content="▣" ToolTip="复制 Base URL"/>
-
-                                        <TextBlock Grid.Row="3" Text="状态" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedProvider.StatusText}" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Border>
-
-                                <Border Style="{StaticResource Card}">
-                                    <StackPanel>
-                                        <Grid Margin="0,0,0,12">
-                                            <TextBlock Text="API Key" FontWeight="SemiBold" FontSize="15"/>
-                                            <TextBlock HorizontalAlignment="Right" Text="{Binding SelectedProvider.KeySummary}"
-                                                       Foreground="{StaticResource MutedBrush}"/>
-                                        </Grid>
-
-                                        <ComboBox ItemsSource="{Binding SelectedProvider.ApiKeys}"
-                                                  SelectedItem="{Binding SelectedProvider.SelectedApiKey}"
-                                                  Margin="0,0,0,12"/>
-
+                        <Grid Grid.Row="3">
+                            <ListBox ItemsSource="{Binding ProvidersView}"
+                                     SelectedItem="{Binding SelectedProvider}"
+                                     ItemContainerStyle="{StaticResource ProviderItem}"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Margin="14,0,12,8"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="48"/>
                                                 <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="20"/>
                                             </Grid.ColumnDefinitions>
-                                            <Border Background="#111A25" BorderBrush="#334154" BorderThickness="1"
-                                                    CornerRadius="8" Padding="12,10">
-                                                <TextBlock Text="{Binding SelectedProvider.SelectedApiKey.DisplayKey}"
-                                                           FontFamily="Cascadia Mono, Consolas"
+
+                                            <Border Width="42" Height="42"
+                                                    CornerRadius="10"
+                                                    Background="{Binding AvatarBrush}"
+                                                    BorderBrush="#6F7FB6"
+                                                    BorderThickness="1">
+                                                <TextBlock Text="{Binding Initial}"
+                                                           FontSize="16"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"/>
+                                            </Border>
+
+                                            <StackPanel Grid.Column="1" Margin="10,-1,8,0">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="14"
+                                                           FontWeight="SemiBold"
                                                            TextTrimming="CharacterEllipsis"/>
-                                            </Border>
-                                            <Button Grid.Column="1" Style="{StaticResource SecondaryButton}"
-                                                    Command="{Binding ToggleKeyCommand}"
-                                                    Content="{Binding SelectedProvider.SelectedApiKey.RevealButtonText}"
-                                                    Margin="9,0,0,0"/>
-                                            <Button Grid.Column="2" Style="{StaticResource PrimaryButton}"
-                                                    Command="{Binding CopyKeyCommand}" Content="复制"
-                                                    Margin="9,0,0,0"/>
+                                                <TextBlock Text="{Binding ProtocolDisplay}"
+                                                           Foreground="{StaticResource MutedBrush}"
+                                                           FontSize="11"
+                                                           Margin="0,3,0,0"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding PrimaryModelId}"
+                                                           Foreground="#75849A"
+                                                           FontSize="11"
+                                                           Margin="0,2,0,0"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+
+                                            <Ellipse Grid.Column="2"
+                                                     Width="9" Height="9"
+                                                     VerticalAlignment="Top"
+                                                     HorizontalAlignment="Right"
+                                                     Margin="0,4,1,0">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Fill" Value="#59677A"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                                                <Setter Property="Fill" Value="{StaticResource SuccessBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
                                         </Grid>
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Style="{StaticResource Card}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="180"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="40"/>
-                                            <RowDefinition Height="40"/>
-                                            <RowDefinition Height="40"/>
-                                        </Grid.RowDefinitions>
-                                        <TextBlock Text="认证类型" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding SelectedProvider.AuthType, TargetNullValue=未记录}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="1" Text="Header" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedProvider.AuthHeader, TargetNullValue=未记录}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="2" Text="前缀" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedProvider.AuthPrefix, TargetNullValue=无}" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Border>
-                            </StackPanel>
-                        </TabItem>
-
-                        <TabItem Header="⌘  模型列表">
-                            <Grid Margin="0,14,0,0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <Border Style="{StaticResource Card}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="150"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="45"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="当前复制模型" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                        <ComboBox Grid.Column="1" ItemsSource="{Binding SelectedProvider.Models}"
-                                                  SelectedItem="{Binding SelectedProvider.SelectedModel}"/>
-                                        <Button Grid.Column="2" Style="{StaticResource IconButton}"
-                                                Command="{Binding CopyModelCommand}" Content="▣" Margin="9,0,0,0"/>
-                                    </Grid>
-                                </Border>
-                                <ListView Grid.Row="1" ItemsSource="{Binding SelectedProvider.Models}"
-                                          SelectedItem="{Binding SelectedProvider.SelectedModel}"
-                                          Background="Transparent" BorderThickness="0">
-                                    <ListView.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Style="{StaticResource Card}" Margin="0,0,0,8">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="170"/>
-                                                        <ColumnDefinition Width="80"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel>
-                                                        <TextBlock Text="{Binding Id}" FontWeight="SemiBold"/>
-                                                        <TextBlock Text="{Binding Description}" Foreground="{StaticResource MutedBrush}"
-                                                                   FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-                                                    </StackPanel>
-                                                    <TextBlock Grid.Column="1" Text="{Binding EndpointTypes}"
-                                                               Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                                    <TextBlock Grid.Column="2" Text="{Binding StateText}" HorizontalAlignment="Right"
-                                                               Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center"/>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
-                            </Grid>
-                        </TabItem>
-
-                        <TabItem Header="⚿  API Key">
-                            <ListView Margin="0,14,0,0" ItemsSource="{Binding SelectedProvider.ApiKeys}"
-                                      SelectedItem="{Binding SelectedProvider.SelectedApiKey}"
-                                      Background="Transparent" BorderThickness="0">
-                                <ListView.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Style="{StaticResource Card}" Margin="0,0,0,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="150"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="90"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding DisplayKey}" FontFamily="Cascadia Mono, Consolas"
-                                                           Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="{StaticResource SuccessBrush}"
-                                                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
                                     </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                        </TabItem>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                        <TabItem Header="▤  备注">
-                            <Border Style="{StaticResource Card}" Margin="0,14,0,0">
-                                <TextBlock Text="{Binding SelectedProvider.Notes, TargetNullValue=暂无备注}"
-                                           TextWrapping="Wrap" Foreground="#C7D0DC"/>
+                            <Border Margin="20"
+                                    Background="#0E1928"
+                                    BorderBrush="#26364E"
+                                    BorderThickness="1"
+                                    CornerRadius="12"
+                                    Padding="18"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Center">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ProviderCountText}" Value="共 0 个供应商">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="⌕" FontSize="28" Foreground="#6B7A91" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="尚未读取到供应商"
+                                               FontWeight="SemiBold"
+                                               Margin="0,10,0,5"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="程序会自动搜索 Cherry Studio 数据库"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               FontSize="11"
+                                               TextAlignment="Center"/>
+                                </StackPanel>
                             </Border>
-                        </TabItem>
-                    </TabControl>
-                </Grid>
-            </ScrollViewer>
+                        </Grid>
 
-            <!-- Actions -->
-            <Border Grid.Column="2" Background="#0E1621" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="14">
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Text="快速复制" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding CopyKeyCommand}"
-                                        Content="⚿  复制 API Key" HorizontalContentAlignment="Left" Margin="0,0,0,8"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding CopyBaseUrlCommand}"
-                                        Content="🔗  复制 Base URL" HorizontalContentAlignment="Left" Margin="0,0,0,8"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding CopyModelCommand}"
-                                        Content="◇  复制模型 ID" HorizontalContentAlignment="Left" Margin="0,0,0,8"/>
-                                <Button Style="{StaticResource PrimaryButton}" Command="{Binding CopyAllCommand}"
-                                        Content="▣  复制全部信息" HorizontalContentAlignment="Left"/>
-                            </StackPanel>
+                        <Border Grid.Row="4"
+                                BorderBrush="{StaticResource BorderSoftBrush}"
+                                BorderThickness="0,1,0,0"
+                                Background="#0A1320">
+                            <Grid Margin="17,0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Width="30" Height="30"
+                                            Background="#151F30"
+                                            BorderBrush="#2A3850"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <TextBlock Text="♙"
+                                                   Foreground="#B9C3D1"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding ProviderCountText}"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Margin="10,0,0,0"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center">
+                                    <Border Width="32" Height="32"
+                                            Background="#19243A"
+                                            BorderBrush="#30405B"
+                                            BorderThickness="1"
+                                            CornerRadius="16">
+                                        <TextBlock Text="☼"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <Border Width="32" Height="32"
+                                            Background="#111A29"
+                                            BorderBrush="#293850"
+                                            BorderThickness="1"
+                                            CornerRadius="16"
+                                            Margin="6,0,0,0">
+                                        <TextBlock Text="☾"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- 中间详情区 -->
+                <Border Grid.Column="1" Background="{StaticResource WindowBrush}">
+                    <Grid Margin="16,12,16,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="74"/>
+                            <RowDefinition Height="86"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="32"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 数据库自动发现卡片 -->
+                        <Border Grid.Row="0"
+                                Background="{StaticResource HeaderGlowGradient}"
+                                BorderBrush="#253650"
+                                BorderThickness="1"
+                                CornerRadius="11"
+                                Padding="14,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="46"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Width="38" Height="38"
+                                        Background="#103625"
+                                        CornerRadius="10"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="✓"
+                                               Foreground="{StaticResource SuccessBrush}"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+
+                                <StackPanel Grid.Column="1" Margin="10,0,12,0" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding ConnectionStatus}"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="14"
+                                                   VerticalAlignment="Center"/>
+                                        <Border Margin="9,0,0,0"
+                                                Padding="7,2">
+                                            <Border.Style>
+                                                <Style TargetType="Border" BasedOn="{StaticResource Pill}">
+                                                    <Setter Property="Background" Value="#3A2431"/>
+                                                    <Setter Property="BorderBrush" Value="#704152"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ConnectionBadgeText}" Value="已连接">
+                                                            <Setter Property="Background" Value="#153528"/>
+                                                            <Setter Property="BorderBrush" Value="#246344"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding ConnectionBadgeText}" FontSize="10"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding DatabaseDisplayPath}"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               FontSize="11"
+                                               Margin="0,5,0,0"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding RescanDatabaseCommand}"
+                                            Content="↻  重新扫描"
+                                            Margin="0,0,8,0"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding ChooseDatabaseCommand}"
+                                            Content="▰  选择数据库"/>
+                                </StackPanel>
+                            </Grid>
                         </Border>
 
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Text="复制为…" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding CopyClaudeCommand}"
-                                        Content="〉_  Claude Code 环境变量" HorizontalContentAlignment="Left" Margin="0,0,0,8"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding CopyOpenAiCommand}"
-                                        Content="◎  OpenAI 环境变量" HorizontalContentAlignment="Left" Margin="0,0,0,8"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding CopyGeminiCommand}"
-                                        Content="✦  Gemini CLI 配置" HorizontalContentAlignment="Left" Margin="0,0,0,8"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding CopyCodexCommand}"
-                                        Content="▣  Codex 配置（TOML）" HorizontalContentAlignment="Left" Margin="0,0,0,8"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding OpenCustomTemplateCommand}"
-                                        Content="&lt;/&gt;  自定义模板" HorizontalContentAlignment="Left"/>
-                            </StackPanel>
-                        </Border>
+                        <!-- 当前供应商头部 -->
+                        <Grid Grid.Row="1" Margin="12,10,6,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="52"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Text="导出" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding ExportJsonCommand}"
-                                        Content="⇩  导出为 JSON" HorizontalContentAlignment="Left" Margin="0,0,0,8"/>
-                                <Button Style="{StaticResource SecondaryButton}" Command="{Binding ExportMarkdownCommand}"
-                                        Content="⇩  导出为 Markdown" HorizontalContentAlignment="Left"/>
-                            </StackPanel>
-                        </Border>
+                            <Border Width="44" Height="44"
+                                    Background="{Binding SelectedProvider.AvatarBrush}"
+                                    BorderBrush="#6851A9"
+                                    BorderThickness="1"
+                                    CornerRadius="11"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedProvider.Initial, TargetNullValue=·}"
+                                           FontSize="18"
+                                           FontWeight="Bold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
 
-                        <Border Background="#151F2C" BorderBrush="#2D3A4D" BorderThickness="1"
-                                CornerRadius="10" Padding="13">
-                            <StackPanel>
-                                <TextBlock Text="安全状态" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <TextBlock Text="• SQLite 只读连接" Foreground="{StaticResource SuccessBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="• 不保存第二份 API Key" Foreground="{StaticResource SuccessBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="• 剪贴板 30 秒自动清除" Foreground="{StaticResource SuccessBrush}"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding SelectedProvider.Name, TargetNullValue=请选择供应商}"
+                                               FontSize="23"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                    <Border Style="{StaticResource Pill}" Margin="10,0,0,0">
+                                        <TextBlock Text="{Binding SelectedProvider.ProtocolDisplay, TargetNullValue=等待数据库}"
+                                                   Foreground="#C6ABFF"
+                                                   FontSize="10"/>
+                                    </Border>
+                                    <Border Style="{StaticResource Pill}"
+                                            Background="#123126"
+                                            BorderBrush="#235A40"
+                                            Margin="7,0,0,0">
+                                        <TextBlock Text="{Binding SelectedProvider.StatusText, TargetNullValue=未连接}"
+                                                   Foreground="{StaticResource SuccessBrush}"
+                                                   FontSize="10"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="{Binding SelectedProvider.Id, TargetNullValue=Cherry Studio 配置将显示在这里}"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           FontSize="11"
+                                           Margin="0,5,0,0"/>
                             </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </Border>
-        </Grid>
 
-        <!-- Footer -->
-        <Border Grid.Row="3" Background="#0D141E" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
-            <Grid Margin="18,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="370"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="330"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource MutedBrush}"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Foreground="{StaticResource MutedBrush}">
-                    <Run Text="最后刷新："/>
-                    <Run Text="{Binding LastRefreshText, Mode=OneWay}"/>
-                    <Run Text="　"/>
-                    <Run Text="↻ 自动刷新已开启" Foreground="{StaticResource SuccessBrush}"/>
-                </TextBlock>
-                <TextBlock Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Foreground="{StaticResource MutedBrush}" Text="快捷键：Ctrl + Shift + K"/>
+                            <Border Grid.Column="2"
+                                    Style="{StaticResource Pill}"
+                                    Background="#151F30"
+                                    BorderBrush="#2C3A52"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="只读模式" Foreground="#AAB6C8" FontSize="11"/>
+                            </Border>
+                        </Grid>
+
+                        <!-- 页签内容 -->
+                        <Grid Grid.Row="2">
+                            <TabControl>
+                                <TabItem>
+                                    <TabItem.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="▣" Margin="0,0,6,0"/>
+                                            <TextBlock Text="基本信息"/>
+                                        </StackPanel>
+                                    </TabItem.Header>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  Padding="0,12,4,0">
+                                        <StackPanel>
+                                            <Border Style="{StaticResource Card}">
+                                                <StackPanel>
+                                                    <TextBlock Text="基本信息"
+                                                               FontSize="15"
+                                                               FontWeight="SemiBold"
+                                                               Margin="0,0,0,10"/>
+                                                    <Border Background="#111B2B"
+                                                            BorderBrush="#24334B"
+                                                            BorderThickness="1"
+                                                            CornerRadius="9">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="168"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="42"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="43"/>
+                                                                <RowDefinition Height="43"/>
+                                                                <RowDefinition Height="48"/>
+                                                                <RowDefinition Height="43"/>
+                                                            </Grid.RowDefinitions>
+
+                                                            <Border Grid.Row="0" Grid.ColumnSpan="3" BorderBrush="#213047" BorderThickness="0,0,0,1"/>
+                                                            <Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="#213047" BorderThickness="0,0,0,1"/>
+                                                            <Border Grid.Row="2" Grid.ColumnSpan="3" BorderBrush="#213047" BorderThickness="0,0,0,1"/>
+
+                                                            <TextBlock Text="供应商名称" Foreground="{StaticResource MutedBrush}" Margin="14,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding SelectedProvider.Name}" VerticalAlignment="Center"/>
+
+                                                            <TextBlock Grid.Row="1" Text="协议类型" Foreground="{StaticResource MutedBrush}" Margin="14,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedProvider.ProtocolDisplay}" VerticalAlignment="Center"/>
+
+                                                            <TextBlock Grid.Row="2" Text="Base URL" Foreground="{StaticResource MutedBrush}" Margin="14,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Row="2" Grid.Column="1"
+                                                                       Text="{Binding SelectedProvider.BaseUrlDisplay}"
+                                                                       VerticalAlignment="Center"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <Button Grid.Row="2" Grid.Column="2"
+                                                                    Style="{StaticResource IconButton}"
+                                                                    Command="{Binding CopyBaseUrlCommand}"
+                                                                    Content="▣"
+                                                                    ToolTip="复制 Base URL"
+                                                                    Margin="0,0,7,0"/>
+
+                                                            <TextBlock Grid.Row="3" Text="状态" Foreground="{StaticResource MutedBrush}" Margin="14,0" VerticalAlignment="Center"/>
+                                                            <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <Ellipse Width="8" Height="8" Fill="{StaticResource SuccessBrush}" Margin="0,0,8,0"/>
+                                                                <TextBlock Text="{Binding SelectedProvider.StatusText}" Foreground="{StaticResource SuccessBrush}"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Row="3" Grid.Column="2"
+                                                                       Text="{Binding LastRefreshText}"
+                                                                       Foreground="{StaticResource MutedDarkBrush}"
+                                                                       FontSize="10"
+                                                                       VerticalAlignment="Center"
+                                                                       HorizontalAlignment="Right"
+                                                                       Margin="0,0,8,0"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <Border Style="{StaticResource Card}">
+                                                <StackPanel>
+                                                    <Grid Margin="0,0,0,10">
+                                                        <TextBlock Text="认证信息" FontSize="15" FontWeight="SemiBold"/>
+                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                            <TextBlock Text="API Key" Foreground="{StaticResource MutedBrush}" Margin="0,0,7,0"/>
+                                                            <Border Style="{StaticResource Pill}" Padding="7,2">
+                                                                <TextBlock Text="{Binding SelectedProvider.KeyCountText}" FontSize="10"/>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Grid>
+
+                                                    <ItemsControl ItemsSource="{Binding SelectedProvider.ApiKeys}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Style="{StaticResource CompactCard}"
+                                                                        Background="#111B2B"
+                                                                        BorderBrush="#253650">
+                                                                    <Grid>
+                                                                        <Grid.RowDefinitions>
+                                                                            <RowDefinition Height="Auto"/>
+                                                                            <RowDefinition Height="Auto"/>
+                                                                            <RowDefinition Height="Auto"/>
+                                                                        </Grid.RowDefinitions>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                        </Grid.ColumnDefinitions>
+
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold"/>
+                                                                            <Border Style="{StaticResource Pill}"
+                                                                                    Background="#32235A"
+                                                                                    BorderBrush="#4B357B"
+                                                                                    Padding="7,2"
+                                                                                    Margin="8,0,0,0">
+                                                                                <TextBlock Text="Key" Foreground="#C9B2FF" FontSize="10"/>
+                                                                            </Border>
+                                                                        </StackPanel>
+
+                                                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                                            <Button Style="{StaticResource IconButton}"
+                                                                                    Command="{Binding DataContext.ToggleApiKeyItemCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type Window}}}"
+                                                                                    CommandParameter="{Binding}"
+                                                                                    Content="◉"
+                                                                                    ToolTip="显示或隐藏"/>
+                                                                            <Button Style="{StaticResource IconButton}"
+                                                                                    Command="{Binding DataContext.CopyApiKeyItemCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type Window}}}"
+                                                                                    CommandParameter="{Binding}"
+                                                                                    Content="▣"
+                                                                                    ToolTip="复制"
+                                                                                    Margin="7,0,0,0"/>
+                                                                        </StackPanel>
+
+                                                                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
+                                                                                   Text="{Binding DisplayKey}"
+                                                                                   FontFamily="Cascadia Mono, Consolas"
+                                                                                   Foreground="#C7D1DF"
+                                                                                   Margin="0,10,0,0"
+                                                                                   TextTrimming="CharacterEllipsis"/>
+
+                                                                        <Grid Grid.Row="2" Grid.ColumnSpan="2" Margin="0,10,0,0">
+                                                                            <TextBlock Text="本地只读，不保存副本"
+                                                                                       Foreground="{StaticResource MutedDarkBrush}"
+                                                                                       FontSize="10"/>
+                                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                                                <Ellipse Width="7" Height="7" Fill="{StaticResource SuccessBrush}" Margin="0,0,6,0"/>
+                                                                                <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource SuccessBrush}" FontSize="10"/>
+                                                                            </StackPanel>
+                                                                        </Grid>
+                                                                    </Grid>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <Border Background="#0F1928"
+                                                            BorderBrush="#25354E"
+                                                            BorderThickness="1"
+                                                            CornerRadius="8"
+                                                            Padding="12"
+                                                            Margin="0,2,0,0">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="130"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="120"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="认证类型" Foreground="{StaticResource MutedBrush}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding SelectedProvider.AuthType, TargetNullValue=未记录}"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding SelectedProvider.AuthHeader, TargetNullValue=未记录}"
+                                                                       Foreground="{StaticResource MutedBrush}"
+                                                                       HorizontalAlignment="Right"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </TabItem>
+
+                                <TabItem>
+                                    <TabItem.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="⌘" Margin="0,0,6,0"/>
+                                            <TextBlock Text="模型列表"/>
+                                            <Border Style="{StaticResource Pill}" Margin="7,0,0,0" Padding="6,1">
+                                                <TextBlock Text="{Binding SelectedProvider.ModelCountText, TargetNullValue=0}" FontSize="9"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </TabItem.Header>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  Padding="0,12,4,0">
+                                        <ItemsControl ItemsSource="{Binding SelectedProvider.Models}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Style="{StaticResource CompactCard}">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="180"/>
+                                                                <ColumnDefinition Width="82"/>
+                                                                <ColumnDefinition Width="40"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Id}" FontWeight="SemiBold"/>
+                                                                <TextBlock Text="{Binding Description}"
+                                                                           Foreground="{StaticResource MutedBrush}"
+                                                                           FontSize="11"
+                                                                           Margin="0,4,0,0"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="1"
+                                                                       Text="{Binding EndpointTypes}"
+                                                                       Foreground="{StaticResource MutedBrush}"
+                                                                       VerticalAlignment="Center"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Grid.Column="2"
+                                                                       Text="{Binding StateText}"
+                                                                       Foreground="{StaticResource SuccessBrush}"
+                                                                       VerticalAlignment="Center"
+                                                                       HorizontalAlignment="Right"/>
+                                                            <Button Grid.Column="3"
+                                                                    Style="{StaticResource IconButton}"
+                                                                    Command="{Binding DataContext.CopyModelItemCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type Window}}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Content="▣"
+                                                                    Margin="6,0,0,0"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </TabItem>
+
+                                <TabItem>
+                                    <TabItem.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="⚿" Margin="0,0,6,0"/>
+                                            <TextBlock Text="API Key"/>
+                                            <Border Style="{StaticResource Pill}" Margin="7,0,0,0" Padding="6,1">
+                                                <TextBlock Text="{Binding SelectedProvider.KeyCountText, TargetNullValue=0}" FontSize="9"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </TabItem.Header>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  Padding="0,12,4,0">
+                                        <ItemsControl ItemsSource="{Binding SelectedProvider.ApiKeys}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Style="{StaticResource Card}">
+                                                        <Grid>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto"/>
+                                                                <RowDefinition Height="Auto"/>
+                                                            </Grid.RowDefinitions>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Label}" FontSize="14" FontWeight="SemiBold"/>
+                                                                <TextBlock Text="{Binding DisplayKey}"
+                                                                           FontFamily="Cascadia Mono, Consolas"
+                                                                           Foreground="#C3CDDA"
+                                                                           Margin="0,9,0,0"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+                                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                                <Button Style="{StaticResource SecondaryButton}"
+                                                                        Command="{Binding DataContext.ToggleApiKeyItemCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type Window}}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Content="{Binding RevealButtonText}"
+                                                                        Margin="0,0,8,0"/>
+                                                                <Button Style="{StaticResource PrimaryButton}"
+                                                                        Command="{Binding DataContext.CopyApiKeyItemCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type Window}}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Content="复制"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
+                                                                       Text="{Binding StatusText}"
+                                                                       Foreground="{StaticResource SuccessBrush}"
+                                                                       FontSize="10"
+                                                                       Margin="0,10,0,0"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </TabItem>
+
+                                <TabItem>
+                                    <TabItem.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="▤" Margin="0,0,6,0"/>
+                                            <TextBlock Text="备注"/>
+                                        </StackPanel>
+                                    </TabItem.Header>
+                                    <Border Style="{StaticResource Card}" Margin="0,12,4,0">
+                                        <TextBlock Text="{Binding SelectedProvider.Notes, TargetNullValue=暂无备注}"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="#C7D0DC"/>
+                                    </Border>
+                                </TabItem>
+                            </TabControl>
+
+                            <!-- 无数据空状态 -->
+                            <Border Background="#0D1624"
+                                    BorderBrush="#26364E"
+                                    BorderThickness="1"
+                                    CornerRadius="12"
+                                    Margin="0,14,4,12">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedProvider}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Border Width="58" Height="58"
+                                            Background="#1A2540"
+                                            BorderBrush="#384B6D"
+                                            BorderThickness="1"
+                                            CornerRadius="16">
+                                        <TextBlock Text="🍒" FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="正在等待 Cherry Studio 数据"
+                                               FontSize="17"
+                                               FontWeight="SemiBold"
+                                               Margin="0,16,0,6"/>
+                                    <TextBlock Text="已自动扫描常见目录；仍未发现时可手动选择数据库"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               TextAlignment="Center"/>
+                                    <Button Style="{StaticResource PrimaryButton}"
+                                            Command="{Binding RescanDatabaseCommand}"
+                                            Content="重新自动扫描"
+                                            Margin="0,15,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Grid Grid.Row="3" Margin="3,0,3,0">
+                            <TextBlock Text="{Binding StatusMessage}"
+                                       Foreground="{StaticResource MutedDarkBrush}"
+                                       FontSize="10"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="SQLite 只读"
+                                       Foreground="{StaticResource SuccessBrush}"
+                                       FontSize="10"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- 右侧快捷操作 -->
+                <Border Grid.Column="2"
+                        Background="{StaticResource SidebarBrush}"
+                        BorderBrush="{StaticResource BorderSoftBrush}"
+                        BorderThickness="1,0,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="13,12,13,14">
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="快速复制" FontWeight="SemiBold" Margin="0,0,0,11"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding CopyKeyCommand}"
+                                            Content="⚿   复制 API Key"
+                                            HorizontalContentAlignment="Left"
+                                            Margin="0,0,0,7"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding CopyBaseUrlCommand}"
+                                            Content="⛓   复制 Base URL"
+                                            HorizontalContentAlignment="Left"
+                                            Margin="0,0,0,7"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding CopyModelCommand}"
+                                            Content="◇   复制模型 ID"
+                                            HorizontalContentAlignment="Left"
+                                            Margin="0,0,0,7"/>
+                                    <Button Style="{StaticResource PrimaryButton}"
+                                            Command="{Binding CopyAllCommand}"
+                                            Content="▣   复制全部信息"
+                                            HorizontalContentAlignment="Left"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="复制为…" FontWeight="SemiBold" Margin="0,0,0,11"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding CopyClaudeCommand}"
+                                            Content="〉_   Claude Code 环境变量"
+                                            HorizontalContentAlignment="Left"
+                                            Margin="0,0,0,7"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding CopyOpenAiCommand}"
+                                            Content="◎   OpenAI 环境变量"
+                                            HorizontalContentAlignment="Left"
+                                            Margin="0,0,0,7"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding CopyGeminiCommand}"
+                                            Content="✦   Gemini CLI 配置"
+                                            HorizontalContentAlignment="Left"
+                                            Margin="0,0,0,7"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding CopyCodexCommand}"
+                                            Content="▣   Codex 配置（TOML）"
+                                            HorizontalContentAlignment="Left"
+                                            Margin="0,0,0,7"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding OpenCustomTemplateCommand}"
+                                            Content="&lt;/&gt;   自定义模板"
+                                            HorizontalContentAlignment="Left"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="导出" FontWeight="SemiBold" Margin="0,0,0,11"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding ExportJsonCommand}"
+                                            Content="⇩   导出为 JSON"
+                                            HorizontalContentAlignment="Left"
+                                            Margin="0,0,0,7"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding ExportMarkdownCommand}"
+                                            Content="⇩   导出为 Markdown"
+                                            HorizontalContentAlignment="Left"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#111C2C"
+                                    BorderBrush="#273850"
+                                    BorderThickness="1"
+                                    CornerRadius="11"
+                                    Padding="14">
+                                <StackPanel>
+                                    <TextBlock Text="安全状态" FontWeight="SemiBold" Margin="0,0,0,9"/>
+                                    <TextBlock Text="• SQL 参数化查询" Foreground="{StaticResource SuccessBrush}" Margin="0,0,0,5"/>
+                                    <TextBlock Text="• 不保存第二份 API Key" Foreground="{StaticResource SuccessBrush}" Margin="0,0,0,5"/>
+                                    <TextBlock Text="• 剪贴板 30 秒自动清除" Foreground="{StaticResource SuccessBrush}"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
             </Grid>
-        </Border>
-    </Grid>
+        </Grid>
+    </Border>
 </Window>

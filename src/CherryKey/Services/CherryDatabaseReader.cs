@@ -1,4 +1,3 @@
-using System.IO;
 using System.Text.Json;
 using CherryKey.Models;
 using Microsoft.Data.Sqlite;

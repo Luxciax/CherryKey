@@ -1,5 +1,9 @@
 using System.Collections.ObjectModel;
 using CherryKey.Infrastructure;
+using MediaBrush = System.Windows.Media.Brush;
+using MediaColor = System.Windows.Media.Color;
+using MediaColorConverter = System.Windows.Media.ColorConverter;
+using MediaSolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace CherryKey.Models;
 
@@ -36,6 +40,10 @@ public sealed class ProviderRecord : ObservableObject
     }
 
     public string Initial => string.IsNullOrWhiteSpace(Name) ? "?" : Name.Trim()[0].ToString().ToUpperInvariant();
+    public MediaBrush AvatarBrush => CreateAvatarBrush(Id);
+    public string PrimaryModelId => SelectedModel?.Id ?? Models.FirstOrDefault()?.Id ?? "未配置模型";
+    public string ModelCountText => Models.Count.ToString();
+    public string KeyCountText => ApiKeys.Count.ToString();
     public string StatusText => IsEnabled ? "已启用" : "已停用";
     public string ProtocolDisplay => string.IsNullOrWhiteSpace(DefaultEndpoint)
         ? (string.IsNullOrWhiteSpace(EndpointTypes) ? "未知协议" : EndpointTypes)
@@ -51,6 +59,21 @@ public sealed class ProviderRecord : ObservableObject
         SelectedModel = Models.FirstOrDefault(m => m.IsEnabled && !m.IsHidden && !m.IsDeprecated)
                         ?? Models.FirstOrDefault(m => !m.IsDeprecated)
                         ?? Models.FirstOrDefault();
+    }
+
+    private static MediaBrush CreateAvatarBrush(string seed)
+    {
+        string[] colors = ["#6D45D7", "#3154C7", "#147B72", "#2D7A3B", "#9A4D16", "#7A3BB5", "#146B98"];
+        var hash = 17;
+        foreach (var character in seed)
+        {
+            hash = unchecked(hash * 31 + character);
+        }
+
+        var color = (MediaColor)MediaColorConverter.ConvertFromString(colors[Math.Abs(hash % colors.Length)]);
+        var brush = new MediaSolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     private static string HumanizeEndpoint(string value) => value.Trim().ToLowerInvariant() switch

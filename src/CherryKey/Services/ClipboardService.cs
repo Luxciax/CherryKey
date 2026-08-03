@@ -1,8 +1,5 @@
 using System.Windows;
 
-using WpfApplication = System.Windows.Application;
-using WpfClipboard = System.Windows.Clipboard;
-
 namespace CherryKey.Services;
 
 public sealed class ClipboardService
@@ -17,7 +14,7 @@ public sealed class ClipboardService
             return;
         }
 
-        WpfClipboard.SetText(text);
+        Clipboard.SetText(text);
         var copyId = Guid.NewGuid();
 
         lock (_sync)
@@ -32,7 +29,7 @@ public sealed class ClipboardService
     {
         await Task.Delay(delay).ConfigureAwait(false);
 
-        await WpfApplication.Current.Dispatcher.InvokeAsync(() =>
+        await Application.Current.Dispatcher.InvokeAsync(() =>
         {
             lock (_sync)
             {
@@ -44,9 +41,9 @@ public sealed class ClipboardService
 
             try
             {
-                if (WpfClipboard.ContainsText() && WpfClipboard.GetText() == copiedText)
+                if (Clipboard.ContainsText() && Clipboard.GetText() == copiedText)
                 {
-                    WpfClipboard.Clear();
+                    Clipboard.Clear();
                 }
             }
             catch

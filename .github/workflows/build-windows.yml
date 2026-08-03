@@ -1,0 +1,115 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore CherryKey.sln
+
+      - name: Build
+        run: dotnet build CherryKey.sln -c Release --no-restore
+
+      - name: Publish stable portable build
+        shell: pwsh
+        run: |
+          dotnet publish src/CherryKey/CherryKey.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            --no-restore `
+            -p:PublishSingleFile=false `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o artifacts/CherryKey-portable
+
+      - name: Startup smoke test
+        shell: pwsh
+        run: |
+          $process = Start-Process `
+            -FilePath "artifacts/CherryKey-portable/CherryKey.exe" `
+            -ArgumentList "--smoke-test", "--no-tray" `
+            -Wait `
+            -PassThru
+
+          if ($process.ExitCode -ne 0) {
+            $log = Join-Path $env:LOCALAPPDATA "CherryKey/Logs/startup.log"
+            if (Test-Path $log) { Get-Content $log }
+            throw "CherryKey startup smoke test failed with exit code $($process.ExitCode)."
+          }
+
+          $log = Join-Path $env:LOCALAPPDATA "CherryKey/Logs/startup.log"
+          if (Test-Path $log) { Get-Content $log }
+
+      - name: Publish single-file build
+        shell: pwsh
+        run: |
+          dotnet publish src/CherryKey/CherryKey.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            --no-restore `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:PublishReadyToRun=false `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o artifacts/CherryKey-single-file
+
+      - name: Package
+        shell: pwsh
+        run: |
+          @"
+          CherryKey v0.2.0
+
+          推荐先运行本目录中的 CherryKey.exe。
+          若双击后仍无窗口，请运行“诊断启动.cmd”，然后查看：
+          %LOCALAPPDATA%\CherryKey\Logs\startup.log
+          "@ | Set-Content -Encoding UTF8 artifacts/CherryKey-portable/使用说明.txt
+
+          @"
+          @echo off
+          chcp 65001 >nul
+          start "" "%~dp0CherryKey.exe" --no-tray
+          timeout /t 3 >nul
+          start "" notepad.exe "%LOCALAPPDATA%\CherryKey\Logs\startup.log"
+          "@ | Set-Content -Encoding ASCII artifacts/CherryKey-portable/诊断启动.cmd
+
+          Compress-Archive -Path artifacts/CherryKey-portable/* -DestinationPath artifacts/CherryKey-portable-win-x64.zip -Force
+          Compress-Archive -Path artifacts/CherryKey-single-file/* -DestinationPath artifacts/CherryKey-single-file-win-x64.zip -Force
+
+      - name: Upload stable portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CherryKey-portable-win-x64
+          path: artifacts/CherryKey-portable-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload single-file artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CherryKey-single-file-win-x64
+          path: artifacts/CherryKey-single-file-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30

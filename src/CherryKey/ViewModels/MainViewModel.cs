@@ -24,7 +24,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private ProviderRecord? _selectedProvider;
     private string _databasePath = string.Empty;
     private string _connectionStatus = "尚未连接";
-    private string _statusMessage = "正在查找 Cherry Studio 数据库…";
+    private string _statusMessage = "正在自动查找 Cherry Studio 数据库…";
     private string _lastRefreshText = "尚未刷新";
     private bool _isBusy;
     private FileSystemWatcher? _watcher;
@@ -38,11 +38,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ProvidersView.Filter = FilterProvider;
 
         RefreshCommand = new RelayCommand(Refresh, () => !IsBusy);
+        RescanDatabaseCommand = new RelayCommand(RescanDatabase, () => !IsBusy);
         ChooseDatabaseCommand = new RelayCommand(ChooseDatabase, () => !IsBusy);
         CopyKeyCommand = new RelayCommand(CopyKey, HasProviderAndKey);
         ToggleKeyCommand = new RelayCommand(ToggleKey, HasProviderAndKey);
+        CopyApiKeyItemCommand = new RelayCommand(CopyApiKeyItem, parameter => parameter is ApiKeyRecord);
+        ToggleApiKeyItemCommand = new RelayCommand(ToggleApiKeyItem, parameter => parameter is ApiKeyRecord);
         CopyBaseUrlCommand = new RelayCommand(CopyBaseUrl, HasProvider);
         CopyModelCommand = new RelayCommand(CopyModel, HasProviderAndModel);
+        CopyModelItemCommand = new RelayCommand(CopyModelItem, parameter => parameter is ModelRecord);
         CopyAllCommand = new RelayCommand(() => CopyTemplate(_templates.BuildAll), HasProvider);
         CopyClaudeCommand = new RelayCommand(() => CopyTemplate(_templates.BuildClaudeCode), HasProvider);
         CopyOpenAiCommand = new RelayCommand(() => CopyTemplate(_templates.BuildOpenAi), HasProvider);
@@ -83,8 +87,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string DatabasePath
     {
         get => _databasePath;
-        private set => SetProperty(ref _databasePath, value);
+        private set
+        {
+            if (SetProperty(ref _databasePath, value))
+            {
+                OnPropertyChanged(nameof(DatabaseDisplayPath));
+                OnPropertyChanged(nameof(ConnectionBadgeText));
+            }
+        }
     }
+
+    public string DatabaseDisplayPath => string.IsNullOrWhiteSpace(DatabasePath)
+        ? _locator.LastScanSummary
+        : DatabasePath;
+
+    public string ConnectionBadgeText => string.IsNullOrWhiteSpace(DatabasePath) ? "未连接" : "已连接";
+    public string ProviderCountText => $"共 {Providers.Count} 个供应商";
 
     public string ConnectionStatus
     {
@@ -117,11 +135,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public RelayCommand RefreshCommand { get; }
+    public RelayCommand RescanDatabaseCommand { get; }
     public RelayCommand ChooseDatabaseCommand { get; }
     public RelayCommand CopyKeyCommand { get; }
     public RelayCommand ToggleKeyCommand { get; }
+    public RelayCommand CopyApiKeyItemCommand { get; }
+    public RelayCommand ToggleApiKeyItemCommand { get; }
     public RelayCommand CopyBaseUrlCommand { get; }
     public RelayCommand CopyModelCommand { get; }
+    public RelayCommand CopyModelItemCommand { get; }
     public RelayCommand CopyAllCommand { get; }
     public RelayCommand CopyClaudeCommand { get; }
     public RelayCommand CopyOpenAiCommand { get; }
@@ -133,20 +155,49 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public event EventHandler? FocusSearchRequested;
 
-    public void Initialize()
+    public void Initialize() => RescanDatabase();
+
+    public void RequestFocusSearch() => FocusSearchRequested?.Invoke(this, EventArgs.Empty);
+
+    private void RescanDatabase()
     {
-        DatabasePath = _locator.Locate() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(DatabasePath))
+        if (IsBusy)
         {
-            ConnectionStatus = "未找到数据库";
-            StatusMessage = "请点击“选择数据库”，定位 Cherry Studio 的 Data\\cherrystudio.sqlite。";
             return;
         }
 
-        Refresh();
-    }
+        IsBusy = true;
+        try
+        {
+            ConnectionStatus = "正在自动发现 Cherry Studio 数据库";
+            StatusMessage = "正在检查默认目录、迁移配置、便携目录和正在运行的 Cherry Studio…";
 
-    public void RequestFocusSearch() => FocusSearchRequested?.Invoke(this, EventArgs.Empty);
+            DatabasePath = _locator.Locate() ?? string.Empty;
+            OnPropertyChanged(nameof(DatabaseDisplayPath));
+
+            if (string.IsNullOrWhiteSpace(DatabasePath))
+            {
+                ClearProviders();
+                ConnectionStatus = "未自动发现 Cherry Studio 数据库";
+                StatusMessage = "已完成自动扫描。若 Cherry Studio 使用了完全自定义的数据目录，请点击“选择数据库”。";
+                return;
+            }
+
+            _settings.SaveDatabasePath(DatabasePath);
+            ReadDatabaseCore();
+        }
+        catch (Exception ex)
+        {
+            ClearProviders();
+            ConnectionStatus = "数据库扫描失败";
+            StatusMessage = ex.Message;
+            AppLog.Write("Database auto-discovery failed.", ex);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     private void Refresh()
     {
@@ -157,36 +208,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (string.IsNullOrWhiteSpace(DatabasePath) || !File.Exists(DatabasePath))
         {
-            ConnectionStatus = "数据库不可用";
-            StatusMessage = "请选择有效的 cherrystudio.sqlite。";
+            RescanDatabase();
             return;
         }
 
         IsBusy = true;
         try
         {
-            var selectedId = SelectedProvider?.Id;
-            var records = _reader.Read(DatabasePath);
-
-            Providers.Clear();
-            foreach (var provider in records)
-            {
-                Providers.Add(provider);
-            }
-
-            SelectedProvider = Providers.FirstOrDefault(p => p.Id == selectedId)
-                               ?? Providers.FirstOrDefault(p => p.IsEnabled)
-                               ?? Providers.FirstOrDefault();
-
-            ConnectionStatus = "已连接到 Cherry Studio";
-            LastRefreshText = DateTime.Now.ToString("HH:mm:ss");
-            StatusMessage = $"已读取 {Providers.Count} 个供应商；数据库全程只读。";
-            SetupWatcher();
+            ReadDatabaseCore();
         }
         catch (Exception ex)
         {
             ConnectionStatus = "读取失败";
             StatusMessage = ex.Message;
+            AppLog.Write("Database refresh failed.", ex);
         }
         finally
         {
@@ -194,9 +229,40 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void ReadDatabaseCore()
+    {
+        var selectedId = SelectedProvider?.Id;
+        var records = _reader.Read(DatabasePath);
+
+        Providers.Clear();
+        foreach (var provider in records)
+        {
+            Providers.Add(provider);
+        }
+
+        SelectedProvider = Providers.FirstOrDefault(provider => provider.Id == selectedId)
+                           ?? Providers.FirstOrDefault(provider => provider.IsEnabled)
+                           ?? Providers.FirstOrDefault();
+
+        ProvidersView.Refresh();
+        OnPropertyChanged(nameof(ProviderCountText));
+        ConnectionStatus = "已自动发现 Cherry Studio 数据库";
+        LastRefreshText = DateTime.Now.ToString("HH:mm:ss");
+        StatusMessage = $"已读取 {Providers.Count} 个供应商；{_locator.LastScanSummary}；数据库全程只读。";
+        SetupWatcher();
+    }
+
+    private void ClearProviders()
+    {
+        Providers.Clear();
+        SelectedProvider = null;
+        ProvidersView.Refresh();
+        OnPropertyChanged(nameof(ProviderCountText));
+    }
+
     private void ChooseDatabase()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
+        var dialog = new OpenFileDialog
         {
             Title = "选择 Cherry Studio 数据库",
             Filter = "Cherry Studio 数据库|cherrystudio.sqlite|SQLite 数据库|*.sqlite;*.db|所有文件|*.*",
@@ -231,15 +297,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void CopyKey()
     {
-        var key = SelectedProvider?.SelectedApiKey?.Key;
-        if (string.IsNullOrEmpty(key))
+        if (SelectedProvider?.SelectedApiKey is { } key)
         {
-            StatusMessage = "当前供应商没有可复制的 API Key。";
-            return;
+            CopyApiKey(key);
         }
-
-        _clipboard.Copy(key);
-        StatusMessage = "API Key 已复制，30 秒后仅在剪贴板内容未变化时自动清除。";
     }
 
     private void ToggleKey()
@@ -248,6 +309,48 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             key.IsRevealed = !key.IsRevealed;
         }
+    }
+
+    private void CopyApiKeyItem(object? parameter)
+    {
+        if (parameter is not ApiKeyRecord key)
+        {
+            return;
+        }
+
+        if (SelectedProvider is not null)
+        {
+            SelectedProvider.SelectedApiKey = key;
+        }
+
+        CopyApiKey(key);
+    }
+
+    private void ToggleApiKeyItem(object? parameter)
+    {
+        if (parameter is not ApiKeyRecord key)
+        {
+            return;
+        }
+
+        if (SelectedProvider is not null)
+        {
+            SelectedProvider.SelectedApiKey = key;
+        }
+
+        key.IsRevealed = !key.IsRevealed;
+    }
+
+    private void CopyApiKey(ApiKeyRecord key)
+    {
+        if (string.IsNullOrEmpty(key.Key))
+        {
+            StatusMessage = "当前 API Key 为空。";
+            return;
+        }
+
+        _clipboard.Copy(key.Key);
+        StatusMessage = "API Key 已复制，30 秒后仅在剪贴板内容未变化时自动清除。";
     }
 
     private void CopyBaseUrl()
@@ -264,12 +367,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void CopyModel()
     {
-        if (SelectedProvider?.SelectedModel is not { } model)
+        if (SelectedProvider?.SelectedModel is { } model)
         {
-            StatusMessage = "请选择模型。";
+            CopyModelValue(model);
+        }
+    }
+
+    private void CopyModelItem(object? parameter)
+    {
+        if (parameter is not ModelRecord model)
+        {
             return;
         }
 
+        if (SelectedProvider is not null)
+        {
+            SelectedProvider.SelectedModel = model;
+        }
+
+        CopyModelValue(model);
+    }
+
+    private void CopyModelValue(ModelRecord model)
+    {
         _clipboard.Copy(model.Id);
         StatusMessage = "模型 ID 已复制。";
     }
@@ -294,7 +414,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var window = new TemplateWindow(SelectedProvider, _templates, _clipboard)
         {
-            Owner = System.Windows.Application.Current.MainWindow
+            Owner = Application.Current.MainWindow
         };
         window.ShowDialog();
     }
@@ -306,7 +426,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var dialog = new Microsoft.Win32.SaveFileDialog
+        var dialog = new SaveFileDialog
         {
             Title = "导出供应商配置",
             Filter = filter,
@@ -336,7 +456,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _refreshTimer = new System.Threading.Timer(
-            _ => System.Windows.Application.Current.Dispatcher.Invoke(Refresh),
+            _ => Application.Current.Dispatcher.Invoke(Refresh),
             null,
             Timeout.Infinite,
             Timeout.Infinite);
@@ -359,10 +479,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         foreach (var command in new[]
                  {
-                     RefreshCommand, ChooseDatabaseCommand, CopyKeyCommand, ToggleKeyCommand,
-                     CopyBaseUrlCommand, CopyModelCommand, CopyAllCommand, CopyClaudeCommand,
-                     CopyOpenAiCommand, CopyGeminiCommand, CopyCodexCommand,
-                     OpenCustomTemplateCommand, ExportJsonCommand, ExportMarkdownCommand
+                     RefreshCommand, RescanDatabaseCommand, ChooseDatabaseCommand,
+                     CopyKeyCommand, ToggleKeyCommand, CopyApiKeyItemCommand, ToggleApiKeyItemCommand,
+                     CopyBaseUrlCommand, CopyModelCommand, CopyModelItemCommand,
+                     CopyAllCommand, CopyClaudeCommand, CopyOpenAiCommand, CopyGeminiCommand,
+                     CopyCodexCommand, OpenCustomTemplateCommand, ExportJsonCommand, ExportMarkdownCommand
                  })
         {
             command.NotifyCanExecuteChanged();

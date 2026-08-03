@@ -1,147 +1,116 @@
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using CherryKey.Services;
 
 namespace CherryKey;
 
 public partial class App : System.Windows.Application
 {
-    private static readonly object LogSync = new();
-
-    internal static string LogFilePath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "CherryKey",
-        "Logs",
-        "startup.log");
-
     protected override void OnStartup(StartupEventArgs e)
     {
-        RegisterGlobalExceptionHandlers();
-        WriteLog($"Application starting. Version={Environment.Version}; Args={string.Join(' ', e.Args)}");
-
         base.OnStartup(e);
+
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+
+        AppLog.Write($"CherryKey starting. Version={typeof(App).Assembly.GetName().Version}; Args={string.Join(' ', e.Args)}");
+
+        var smokeTest = e.Args.Any(arg => string.Equals(arg, "--smoke-test", StringComparison.OrdinalIgnoreCase));
+        var noTray = smokeTest || e.Args.Any(arg => string.Equals(arg, "--no-tray", StringComparison.OrdinalIgnoreCase));
 
         try
         {
-            var smokeTest = e.Args.Any(arg => string.Equals(arg, "--smoke-test", StringComparison.OrdinalIgnoreCase));
-            var noTray = smokeTest ||
-                         e.Args.Any(arg => string.Equals(arg, "--no-tray", StringComparison.OrdinalIgnoreCase));
-
-            var window = new MainWindow(enableTray: !noTray);
+            var window = new MainWindow(noTray);
             MainWindow = window;
-            window.Show();
-            window.Activate();
-
-            WriteLog($"Main window shown. TrayEnabled={!noTray}");
 
             if (smokeTest)
             {
-                Dispatcher.BeginInvoke(
-                    DispatcherPriority.ApplicationIdle,
-                    new Action(() =>
-                    {
-                        WriteLog("Smoke test passed.");
-                        Shutdown(0);
-                    }));
+                window.Measure(new Size(1440, 900));
+                window.Arrange(new Rect(0, 0, 1440, 900));
+                window.UpdateLayout();
+                AppLog.Write("Startup smoke test passed: MainWindow XAML loaded and layout completed.");
+                window.Dispose();
+                Shutdown(0);
+                return;
             }
+
+            window.Show();
+            window.Activate();
+
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+            {
+                EnsureWindowVisible(window);
+                AppLog.Write($"Main window shown. Visibility={window.Visibility}; State={window.WindowState}.");
+            });
         }
         catch (Exception ex)
         {
-            WriteLog("Fatal startup exception.", ex);
-            ShowFatalError(ex);
+            ShowFatalStartupError("CherryKey 启动失败", ex);
             Shutdown(-1);
         }
     }
 
+    private static void EnsureWindowVisible(Window window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+        {
+            window.WindowState = WindowState.Normal;
+        }
+
+        var workArea = SystemParameters.WorkArea;
+        if (window.Left > workArea.Right - 80 || window.Top > workArea.Bottom - 80 ||
+            window.Left + window.Width < workArea.Left + 80 || window.Top + window.Height < workArea.Top + 80)
+        {
+            window.Left = workArea.Left + Math.Max(0, (workArea.Width - window.ActualWidth) / 2);
+            window.Top = workArea.Top + Math.Max(0, (workArea.Height - window.ActualHeight) / 2);
+        }
+
+        window.ShowInTaskbar = true;
+        window.Visibility = Visibility.Visible;
+        window.Topmost = true;
+        window.Topmost = false;
+        window.Activate();
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        AppLog.Write("Unhandled UI exception.", e.Exception);
+        MessageBox.Show(
+            $"CherryKey 发生未处理错误：\n\n{e.Exception.Message}\n\n日志：{AppLog.LogPath}",
+            "CherryKey 错误",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        e.Handled = true;
+    }
+
+    private static void OnDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e) =>
+        AppLog.Write("Unhandled AppDomain exception.", e.ExceptionObject as Exception);
+
+    private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        AppLog.Write("Unobserved task exception.", e.Exception);
+        e.SetObserved();
+    }
+
+    private static void ShowFatalStartupError(string title, Exception exception)
+    {
+        AppLog.Write(title, exception);
+        MessageBox.Show(
+            $"{title}：\n\n{exception.Message}\n\n详细日志已保存到：\n{AppLog.LogPath}",
+            title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
-        try
+        if (MainWindow is IDisposable disposable)
         {
-            if (MainWindow is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-        }
-        catch (Exception ex)
-        {
-            WriteLog("Failed to dispose main window.", ex);
+            disposable.Dispose();
         }
 
-        WriteLog($"Application exited. Code={e.ApplicationExitCode}");
+        AppLog.Write($"CherryKey exiting. Code={e.ApplicationExitCode}.");
         base.OnExit(e);
-    }
-
-    private void RegisterGlobalExceptionHandlers()
-    {
-        DispatcherUnhandledException += (_, args) =>
-        {
-            WriteLog("Unhandled dispatcher exception.", args.Exception);
-            ShowFatalError(args.Exception);
-            args.Handled = true;
-        };
-
-        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-        {
-            WriteLog(
-                $"Unhandled AppDomain exception. IsTerminating={args.IsTerminating}",
-                args.ExceptionObject as Exception);
-        };
-
-        TaskScheduler.UnobservedTaskException += (_, args) =>
-        {
-            WriteLog("Unobserved task exception.", args.Exception);
-            args.SetObserved();
-        };
-    }
-
-    internal static void WriteLog(string message, Exception? exception = null)
-    {
-        try
-        {
-            lock (LogSync)
-            {
-                var directory = Path.GetDirectoryName(LogFilePath);
-                if (!string.IsNullOrWhiteSpace(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                var builder = new StringBuilder()
-                    .Append('[')
-                    .Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"))
-                    .Append("] ")
-                    .AppendLine(message);
-
-                if (exception is not null)
-                {
-                    builder.AppendLine(exception.ToString());
-                }
-
-                File.AppendAllText(LogFilePath, builder.ToString(), new UTF8Encoding(false));
-            }
-        }
-        catch
-        {
-            // Logging must never become another startup failure.
-        }
-    }
-
-    private static void ShowFatalError(Exception exception)
-    {
-        try
-        {
-            System.Windows.MessageBox.Show(
-                $"CherryKey 启动或运行时发生错误。\n\n{exception.Message}\n\n日志：\n{LogFilePath}",
-                "CherryKey",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-        catch
-        {
-            // Nothing else can be shown safely.
-        }
     }
 }

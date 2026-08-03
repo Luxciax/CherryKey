@@ -16,12 +16,8 @@ if (-not (Test-Path ".git")) {
 
 git branch -M main
 
-if (-not (git config user.name)) {
-    git config user.name "Luxciax"
-}
-if (-not (git config user.email)) {
-    git config user.email "Luxciax@users.noreply.github.com"
-}
+if (-not (git config user.name)) { git config user.name "Luxciax" }
+if (-not (git config user.email)) { git config user.email "Luxciax@users.noreply.github.com" }
 
 $origin = git remote get-url origin 2>$null
 if ($LASTEXITCODE -eq 0) {
@@ -30,11 +26,20 @@ if ($LASTEXITCODE -eq 0) {
     git remote add origin $Repository
 }
 
-git add .
+Write-Host "正在同步远端仓库…" -ForegroundColor Cyan
+git fetch origin main
+if ($LASTEXITCODE -eq 0) {
+    # Make the remote commit the parent while preserving this package's working tree.
+    git reset --mixed origin/main
+}
+
+git add -A
 $changes = git status --porcelain
 if ($changes) {
-    git commit -m "feat: initialize CherryKey"
+    git commit -m "fix: make startup visible and add diagnostics"
     if ($LASTEXITCODE -ne 0) { throw "git commit 失败。" }
+} else {
+    Write-Host "没有需要提交的变化。" -ForegroundColor Yellow
 }
 
 Write-Host "`n正在推送到 $Repository" -ForegroundColor Cyan
@@ -42,7 +47,7 @@ Write-Host "首次推送时 Git Credential Manager 可能打开浏览器，请�
 
 git push -u origin main
 if ($LASTEXITCODE -ne 0) {
-    throw "推送失败。请检查 GitHub 登录状态、仓库地址以及仓库是否为空。"
+    throw "推送失败。请检查 GitHub 登录状态和仓库权限。"
 }
 
 Write-Host "`n推送完成。GitHub Actions 已自动开始 Windows 构建。" -ForegroundColor Green

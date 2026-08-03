@@ -1,12 +1,14 @@
 # CherryKey
 
+> 当前界面版本：v0.2.0（概念图复原版）
+
 CherryKey 是 Cherry Studio 的 Windows 本地 API 配置伴生工具。
 
 它不会重新实现模型协议适配，也不会修改 Cherry Studio 数据。它只读 Cherry Studio 的 SQLite 数据库，提供供应商搜索、API Key / Base URL / 模型 ID 快速复制，以及常见客户端配置模板。
 
 ## 当前功能
 
-- 自动定位 `%APPDATA%\CherryStudio\Data\cherrystudio.sqlite`
+- 自动发现默认目录、迁移配置、便携目录和正在运行的 Cherry Studio 数据库
 - 支持手动选择自定义数据目录中的数据库
 - 只读读取 `user_provider`、`user_model`
 - 兼容 API Key JSON 数组和常见旧格式
