@@ -6,9 +6,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>CherryKey</AssemblyName>
-    <Version>0.3.2</Version>
-    <FileVersion>0.3.2.0</FileVersion>
-    <InformationalVersion>0.3.2</InformationalVersion>
+    <Version>0.4.0</Version>
+    <FileVersion>0.4.0.0</FileVersion>
+    <InformationalVersion>0.4.0</InformationalVersion>
     <RootNamespace>CherryKey</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\CherryKey.ico</ApplicationIcon>

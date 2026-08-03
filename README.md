@@ -1,10 +1,18 @@
 # CherryKey
 
-> 当前版本：v0.3.2（v1 Local Storage 解析修复 + 启动卡死修复 + v1/v2 双数据源兼容版）
+> 当前版本：v0.4.0（全新三栏 UI + 亮/暗主题 + v1/v2 双数据源兼容版）
 
 CherryKey 是 Cherry Studio 的 Windows 本地 API 配置伴生工具。它只读 Cherry Studio 的本地配置，提供供应商搜索、API Key / Base URL / 模型 ID 快速复制，以及常见客户端配置模板。
 
-## v0.3.2 修复重点
+## v0.4.0 更新重点
+
+- 按 `CherryKey_UI_Refactor_v0.4` 设计稿重建 WPF 主界面
+- 使用更紧凑的 292 / 自适应 / 276 三栏布局与统一卡片层级
+- 新增可即时切换的亮色、暗色主题
+- 重构供应商列表、数据源状态、详情标签页和快捷操作区
+- 保留 API Key 遮盖、配置复制、导出、托盘及 v1/v2 自动发现能力
+
+## v0.3.2 解析修复
 
 - 正确解析 Chromium Local Storage 的 `_<origin>\0<script key>` 二进制键结构
 - 正确处理 `0x00 = UTF-16LE`、`0x01 = Latin-1`，不再把 Latin-1 当成 UTF-8

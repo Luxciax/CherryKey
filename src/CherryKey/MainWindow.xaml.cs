@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using CherryKey.Services;
 using CherryKey.ViewModels;
@@ -25,6 +26,7 @@ public partial class MainWindow : Window, IDisposable
     private bool _allowExit;
     private bool _disposed;
     private bool _trayReady;
+    private bool _isLightTheme;
 
     public Task InitializationTask { get; private set; } = Task.CompletedTask;
 
@@ -223,6 +225,90 @@ public partial class MainWindow : Window, IDisposable
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void ToggleTheme_Click(object sender, RoutedEventArgs e)
+    {
+        _isLightTheme = !_isLightTheme;
+        ApplyTheme(_isLightTheme);
+        ThemeGlyph.Text = _isLightTheme ? "☾" : "☼";
+        ThemeButton.ToolTip = _isLightTheme ? "切换到暗色主题" : "切换到亮色主题";
+    }
+
+    private static void ApplyTheme(bool light)
+    {
+        var palette = light
+            ? new Dictionary<string, string>
+            {
+                ["WindowBrush"] = "#F5F7FB",
+                ["TitleBarBrush"] = "#FFFFFF",
+                ["SidebarBrush"] = "#F9FAFC",
+                ["PanelBrush"] = "#FFFFFF",
+                ["PanelRaisedBrush"] = "#F7F8FC",
+                ["PanelHoverBrush"] = "#F0F2F8",
+                ["CardBrush"] = "#FFFFFF",
+                ["InputBrush"] = "#F5F7FB",
+                ["TextBrush"] = "#182235",
+                ["TextSecondaryBrush"] = "#4D5A70",
+                ["MutedBrush"] = "#768299",
+                ["MutedDarkBrush"] = "#A6AFBD",
+                ["BorderBrush"] = "#E0E5EE",
+                ["BorderSoftBrush"] = "#E0E5EE",
+                ["BorderStrongBrush"] = "#CCD4E1",
+                ["AccentBrush"] = "#7043DF",
+                ["AccentLightBrush"] = "#7043DF",
+                ["AccentDarkBrush"] = "#5C2EC5",
+                ["AccentSoftBrush"] = "#EEE9FB",
+                ["SuccessBrush"] = "#16A76A",
+                ["SuccessDarkBrush"] = "#E8F6F0",
+                ["DangerBrush"] = "#DC5568",
+            }
+            : new Dictionary<string, string>
+            {
+                ["WindowBrush"] = "#080D16",
+                ["TitleBarBrush"] = "#0B1220",
+                ["SidebarBrush"] = "#0B1422",
+                ["PanelBrush"] = "#111C2D",
+                ["PanelRaisedBrush"] = "#152238",
+                ["PanelHoverBrush"] = "#192944",
+                ["CardBrush"] = "#131F33",
+                ["InputBrush"] = "#101B2C",
+                ["TextBrush"] = "#F3F6FB",
+                ["TextSecondaryBrush"] = "#BAC5D6",
+                ["MutedBrush"] = "#7F8DA5",
+                ["MutedDarkBrush"] = "#506078",
+                ["BorderBrush"] = "#23334C",
+                ["BorderSoftBrush"] = "#23334C",
+                ["BorderStrongBrush"] = "#314662",
+                ["AccentBrush"] = "#8758F3",
+                ["AccentLightBrush"] = "#A786F6",
+                ["AccentDarkBrush"] = "#6D3BD7",
+                ["AccentSoftBrush"] = "#24203E",
+                ["SuccessBrush"] = "#2DD486",
+                ["SuccessDarkBrush"] = "#143A2C",
+                ["DangerBrush"] = "#EF6C7B",
+            };
+
+        foreach (var (key, colorText) in palette)
+        {
+            var color = (Color)ColorConverter.ConvertFromString(colorText);
+            Application.Current.Resources[key] = new SolidColorBrush(color);
+        }
+
+        Application.Current.Resources["AccentGradient"] = CreateGradient(
+            light ? "#7043DF" : "#8758F3",
+            light ? "#5C2EC5" : "#6D3BD7");
+        Application.Current.Resources["HeaderGlowGradient"] = CreateGradient(
+            light ? "#FFFFFF" : "#111C2D",
+            light ? "#F7F3FF" : "#171D35");
+    }
+
+    private static LinearGradientBrush CreateGradient(string start, string end)
+    {
+        return new LinearGradientBrush(
+            (Color)ColorConverter.ConvertFromString(start),
+            (Color)ColorConverter.ConvertFromString(end),
+            0);
+    }
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
