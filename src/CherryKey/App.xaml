@@ -1,0 +1,170 @@
+<Application x:Class="CherryKey.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <Color x:Key="WindowColor">#0B1018</Color>
+        <Color x:Key="PanelColor">#111925</Color>
+        <Color x:Key="PanelRaisedColor">#172230</Color>
+        <Color x:Key="BorderColor">#293648</Color>
+        <Color x:Key="TextColor">#EEF2F8</Color>
+        <Color x:Key="MutedColor">#9AA8B8</Color>
+        <Color x:Key="AccentColor">#8B5CF6</Color>
+        <Color x:Key="AccentDarkColor">#5F36CC</Color>
+        <Color x:Key="SuccessColor">#2ED477</Color>
+        <Color x:Key="DangerColor">#F06A7A</Color>
+
+        <SolidColorBrush x:Key="WindowBrush" Color="{StaticResource WindowColor}"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}"/>
+        <SolidColorBrush x:Key="PanelRaisedBrush" Color="{StaticResource PanelRaisedColor}"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+        <SolidColorBrush x:Key="TextBrush" Color="{StaticResource TextColor}"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="{StaticResource MutedColor}"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+        <SolidColorBrush x:Key="AccentDarkBrush" Color="{StaticResource AccentDarkColor}"/>
+        <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Background" Value="#1A2533"/>
+            <Setter Property="BorderBrush" Value="#344358"/>
+            <Setter Property="CaretBrush" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Background" Value="#1A2533"/>
+            <Setter Property="BorderBrush" Value="#344358"/>
+            <Setter Property="Padding" Value="8,6"/>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Background" Value="#192433"/>
+            <Setter Property="BorderBrush" Value="#344358"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="13,9"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#233247"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.78"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.42"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderBrush" Value="#A987FF"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Width" Value="35"/>
+            <Setter Property="Height" Value="35"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="15"/>
+        </Style>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PanelRaisedBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="0,0,0,14"/>
+        </Style>
+
+        <Style TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}"
+                                CornerRadius="10" Padding="12">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#382864"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#6849A8"/>
+                                <Setter TargetName="Root" Property="BorderThickness" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#182333"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="True"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Root" Property="Background" Value="#413071"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="15,10"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Grid>
+                            <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter ContentSource="Header" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border x:Name="Line" Height="3" Background="Transparent"
+                                    VerticalAlignment="Bottom" CornerRadius="2"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Foreground" Value="#C6AAFF"/>
+                                <Setter TargetName="Line" Property="Background" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Application.Resources>
+</Application>

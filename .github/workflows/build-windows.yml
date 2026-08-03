@@ -1,0 +1,55 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore CherryKey.sln
+
+      - name: Build
+        run: dotnet build CherryKey.sln -c Release --no-restore
+
+      - name: Publish portable win-x64
+        shell: pwsh
+        run: |
+          dotnet publish src/CherryKey/CherryKey.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            --no-restore `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o artifacts/CherryKey
+
+          Compress-Archive -Path artifacts/CherryKey/* -DestinationPath artifacts/CherryKey-win-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CherryKey-win-x64
+          path: artifacts/CherryKey-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,13 @@
+.vs/
+.vscode/
+.idea/
+**/bin/
+**/obj/
+artifacts/
+*.user
+*.suo
+*.nupkg
+*.snupkg
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
